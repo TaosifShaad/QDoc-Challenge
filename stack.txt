@@ -1,0 +1,11 @@
+Layer	Technology	Purpose
+Framework	Next.js 14+ (App Router)	Full-stack framework — handles frontend, API routes, and server-side rendering
+Styling	Tailwind CSS + Shadcn/ui	Clean, clinical UI with accessible pre-built components
+Database	PostgreSQL	Relational storage for patients, vaccines, records, and rules
+ORM	Prisma	Type-safe database access and easy migrations
+Rule Engine	json-rules-engine	Flexible eligibility logic (age, conditions, dose history)
+Timeline Visualization	Framer Motion	Animated, color-coded immunization timeline
+Charts	Recharts	Data visualizations (coverage stats, dashboards)
+Reminders	node-cron (simulated)	Scheduled reminder simulation (email/SMS/in-app)
+CSV Parsing	PapaParse	Client/server-side CSV upload for bulk patient import
+Notifications UI	Sonner (via Shadcn/ui)	Toast notifications for in-app reminders
