@@ -402,7 +402,7 @@ export default function PatientsPage() {
                     </CardContent>
                   </Card>
                 )}
-                {ocrDebug && (
+                {/* {ocrDebug && (
                   <Card className="qdoc-card mb-4 border border-[#c2dcee]">
                     <CardHeader>
                       <CardTitle className="text-sm text-[#12455a]">
@@ -438,7 +438,7 @@ export default function PatientsPage() {
                       )}
                     </CardContent>
                   </Card>
-                )}
+                )} */}
                 <PatientForm
                   prefill={prefill}
                   onSuccess={() => {
