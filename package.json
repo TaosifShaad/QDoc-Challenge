@@ -12,6 +12,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.8.2",
     "@supabase/supabase-js": "^2.97.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/papaparse": "^5.5.2",
     "@types/pg": "^8.16.0",
@@ -33,8 +34,10 @@
     "react-hook-form": "^7.71.1",
     "recharts": "^3.7.0",
     "resend": "^6.9.2",
+    "sharp": "^0.34.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "tesseract.js": "^6.0.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

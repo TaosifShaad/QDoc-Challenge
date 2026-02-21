@@ -1,35 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import { AuthGuard } from "@/components/auth-guard";
-import { PatientForm } from "@/components/patient-form";
+import { PatientForm, type PatientFormPrefill } from "@/components/patient-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 import {
   Syringe,
   Heart,
   Shield,
-  Calendar,
   User,
   CheckCircle2,
   AlertTriangle,
   Plus,
-  Save,
   Loader2,
-  Pencil,
   X,
 } from "lucide-react";
 import type { Patient } from "@/lib/types";
-import {
-  CHRONIC_CONDITIONS,
-  RISK_FACTORS,
-  GENDER_OPTIONS,
-  VACCINE_NAMES,
-} from "@/lib/types";
 import { getRecommendations } from "@/lib/vaccine-data";
 import { motion } from "framer-motion";
 
@@ -42,11 +34,40 @@ interface CurrentUser {
   createdAt: string;
 }
 
+interface OcrExtractResponse {
+  source: "ocr";
+  fields: {
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: string;
+    documentTitle?: string;
+    issuingProvince?: string;
+    country?: string;
+    pageIndicator?: string;
+    vaccinesAdministered?: number;
+    issuedOn?: string;
+  };
+  vaccinations: Array<{
+    date?: string;
+    product?: string;
+    lot?: string;
+  }>;
+  warnings: string[];
+  rawText?: string;
+}
+
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showProofUploadForm, setShowProofUploadForm] = useState(false);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [prefill, setPrefill] = useState<PatientFormPrefill | null>(null);
+  const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
+  const [ocrDebug, setOcrDebug] = useState<OcrExtractResponse | null>(null);
 
   const fetchPatients = async () => {
     try {
@@ -87,6 +108,85 @@ export default function PatientsPage() {
     return Math.max(0, age);
   };
 
+  const splitFullName = (fullName?: string) => {
+    if (!fullName) return {};
+    const clean = fullName.trim().replace(/\s+/g, " ");
+    if (!clean) return {};
+    if (clean.includes(",")) {
+      const [lastName, firstName] = clean.split(",", 2).map((s) => s.trim());
+      return { firstName, lastName };
+    }
+    const parts = clean.split(" ");
+    if (parts.length === 1) return { firstName: parts[0] };
+    return {
+      firstName: parts.slice(0, -1).join(" "),
+      lastName: parts[parts.length - 1],
+    };
+  };
+
+  const handleProofFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.target.files?.[0] ?? null;
+    setProofFile(nextFile);
+  };
+
+  const handleExtractProof = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!proofFile) {
+      toast.error("Please choose an image first.");
+      return;
+    }
+
+    setUploadingProof(true);
+    const controller = new AbortController();
+    const timeoutMs = 140_000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const body = new FormData();
+      body.append("file", proofFile);
+
+      const res = await fetch("/api/immunization/extract", {
+        method: "POST",
+        body,
+        signal: controller.signal,
+      });
+
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.error ?? "Failed to extract vaccination info.");
+      }
+
+      const ocr = payload as OcrExtractResponse;
+      const fromFullName = splitFullName(ocr.fields.fullName);
+      setOcrDebug(ocr);
+
+      setPrefill({
+        firstName: ocr.fields.firstName ?? fromFullName.firstName,
+        lastName: ocr.fields.lastName ?? fromFullName.lastName,
+        dateOfBirth: ocr.fields.dateOfBirth,
+        vaccinations: ocr.vaccinations,
+      });
+
+      setOcrWarnings(ocr.warnings ?? []);
+      setShowProofUploadForm(false);
+      toast.success("OCR complete. Review and submit the pre-filled form.");
+      if ((ocr.warnings ?? []).length > 0) {
+        toast.warning("Some fields could not be confidently extracted.");
+      }
+    } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === "AbortError"
+          ? `OCR request timed out after ${Math.floor(timeoutMs / 1000)} seconds. Try again once or use a clearer image.`
+          : error instanceof Error
+            ? error.message
+            : "Failed to extract vaccination info.";
+      toast.error(message);
+    } finally {
+      clearTimeout(timeoutId);
+      setUploadingProof(false);
+    }
+  };
+
   return (
     <AuthGuard>
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -108,7 +208,12 @@ export default function PatientsPage() {
             </div>
             {patients.length > 0 && !showCreateForm && (
               <Button
-                onClick={() => setShowCreateForm(true)}
+                onClick={() => {
+                  setShowCreateForm(true);
+                  setShowProofUploadForm(false);
+                  setPrefill(null);
+                  setOcrWarnings([]);
+                }}
                 className="bg-[#116cb6] text-white hover:bg-[#0d4d8b]"
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -156,14 +261,32 @@ export default function PatientsPage() {
                 <h2 className="text-lg font-semibold text-[#12455a]">
                   Register New Patient
                 </h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCreateForm(false)}
-                >
-                  <X className="mr-1 h-3.5 w-3.5" />
-                  Cancel
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowProofUploadForm(true);
+                      setProofFile(null);
+                    }}
+                  >
+                    Fill from Proof of Vaccination card
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setShowProofUploadForm(false);
+                      setProofFile(null);
+                      setPrefill(null);
+                      setOcrWarnings([]);
+                    }}
+                  >
+                    <X className="mr-1 h-3.5 w-3.5" />
+                    Cancel
+                  </Button>
+                </div>
               </div>
             )}
             {patients.length === 0 && (
@@ -177,14 +300,126 @@ export default function PatientsPage() {
                   you&apos;ve already received — so we can generate personalized
                   recommendations.
                 </p>
+                <div className="mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowProofUploadForm(true);
+                      setProofFile(null);
+                    }}
+                  >
+                    Fill from Proof of Vaccination card
+                  </Button>
+                </div>
               </div>
             )}
-            <PatientForm
-              onSuccess={() => {
-                setShowCreateForm(false);
-                fetchPatients();
-              }}
-            />
+            {showProofUploadForm ? (
+              <Card className="qdoc-card border-none">
+                <CardHeader>
+                  <CardTitle className="text-lg text-[#12455a]">
+                    Upload Proof of Vaccination Card
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form className="space-y-4" onSubmit={handleExtractProof}>
+                  <div className="space-y-2">
+                    <Label htmlFor="proof-upload" className="text-[#12455a]">
+                      Upload image
+                    </Label>
+                    <Input
+                      id="proof-upload"
+                      type="file"
+                      accept="image/*"
+                      className="cursor-pointer"
+                      onChange={handleProofFileChange}
+                    />
+                  </div>
+                    <div className="flex items-center gap-2">
+                      <Button type="submit" disabled={!proofFile || uploadingProof}>
+                        {uploadingProof && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Extract and Fill Form
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        onClick={() => {
+                          setShowProofUploadForm(false);
+                          setProofFile(null);
+                        }}
+                      >
+                        Back to Register New Patient
+                      </Button>
+                    </div>
+                    {uploadingProof && (
+                      <p className="text-xs text-[#5a7d8e]">
+                        Running OCR... first run can take up to about 2 minutes.
+                      </p>
+                    )}
+                  </form>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {ocrWarnings.length > 0 && (
+                  <Card className="qdoc-card mb-4 border border-[#f8d586] bg-[#fef9e7]">
+                    <CardContent className="p-4">
+                      <p className="text-sm font-medium text-[#12455a]">
+                        OCR Notes
+                      </p>
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#5a7d8e]">
+                        {ocrWarnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+                {ocrDebug && (
+                  <Card className="qdoc-card mb-4 border border-[#c2dcee]">
+                    <CardHeader>
+                      <CardTitle className="text-sm text-[#12455a]">
+                        OCR Debug Data
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-xs">
+                      <div>
+                        <p className="font-medium text-[#12455a]">Extracted Fields</p>
+                        <pre className="mt-1 overflow-auto rounded bg-[#f8fbfe] p-2 text-[#5a7d8e]">
+{JSON.stringify(ocrDebug.fields, null, 2)}
+                        </pre>
+                      </div>
+                      <div>
+                        <p className="font-medium text-[#12455a]">Vaccinations</p>
+                        <pre className="mt-1 overflow-auto rounded bg-[#f8fbfe] p-2 text-[#5a7d8e]">
+{JSON.stringify(ocrDebug.vaccinations, null, 2)}
+                        </pre>
+                      </div>
+                      {ocrDebug.rawText && (
+                        <div>
+                          <p className="font-medium text-[#12455a]">Raw OCR Text</p>
+                          <pre className="mt-1 max-h-52 overflow-auto rounded bg-[#f8fbfe] p-2 whitespace-pre-wrap text-[#5a7d8e]">
+{ocrDebug.rawText}
+                          </pre>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+                <PatientForm
+                  prefill={prefill}
+                  onSuccess={() => {
+                    setShowCreateForm(false);
+                    setShowProofUploadForm(false);
+                    setProofFile(null);
+                    setPrefill(null);
+                    setOcrWarnings([]);
+                    setOcrDebug(null);
+                    fetchPatients();
+                  }}
+                />
+              </>
+            )}
           </motion.div>
         ) : (
           /* ── PATIENT LIST ────────────────────────────────── */

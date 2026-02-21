@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -43,6 +43,21 @@ type PatientFormData = z.infer<typeof patientSchema>;
 
 interface PatientFormProps {
   onSuccess: () => void;
+  prefill?: PatientFormPrefill | null;
+}
+
+export interface OcrVaccinationPrefill {
+  date?: string;
+  product?: string;
+  lot?: string;
+}
+
+export interface PatientFormPrefill {
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  vaccinations?: OcrVaccinationPrefill[];
 }
 
 /* ── Month names for selector ───────────────────────────────── */
@@ -75,26 +90,65 @@ interface VaccineSelection {
   doses: number;
 }
 
-export function PatientForm({ onSuccess }: PatientFormProps) {
+const emptyVaccineSelections = () =>
+  Object.fromEntries(
+    VACCINE_NAMES.map((v) => [v, { selected: false, month: "", year: "", doses: 1 }])
+  ) as Record<string, VaccineSelection>;
+
+const normalizeToken = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+
+const mapProductToVaccineName = (product: string): string | null => {
+  const normalized = normalizeToken(product);
+  if (!normalized) return null;
+  if (normalized.includes("pfizer") || normalized.includes("comirnaty")) {
+    return "COVID-19 (Pfizer-BioNTech)";
+  }
+  if (normalized.includes("moderna") || normalized.includes("spikevax")) {
+    return "COVID-19 (Moderna)";
+  }
+  if (normalized.includes("influenza") || normalized.includes("flu")) {
+    return "Influenza (Flu)";
+  }
+  if (normalized.includes("tdap") || normalized.includes("tetanus")) {
+    return "Tdap (Tetanus, Diphtheria, Pertussis)";
+  }
+  if (normalized.includes("mmr")) {
+    return "MMR (Measles, Mumps, Rubella)";
+  }
+  if (normalized.includes("hepatitis a")) return "Hepatitis A";
+  if (normalized.includes("hepatitis b")) return "Hepatitis B";
+  if (normalized.includes("hpv") || normalized.includes("papillomavirus")) {
+    return "HPV (Human Papillomavirus)";
+  }
+  if (normalized.includes("pcv13")) return "Pneumococcal (PCV13)";
+  if (normalized.includes("ppsv23")) return "Pneumococcal (PPSV23)";
+  if (normalized.includes("varicella") || normalized.includes("chickenpox")) {
+    return "Varicella (Chickenpox)";
+  }
+  if (normalized.includes("shingles") || normalized.includes("zoster")) {
+    return "Shingles (Zoster)";
+  }
+  if (normalized.includes("meningococcal")) return "Meningococcal";
+  if (normalized.includes("polio") || normalized.includes("ipv")) return "Polio (IPV)";
+  if (normalized.includes("rotavirus")) return "Rotavirus";
+  return null;
+};
+
+const isIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
   const [submitting, setSubmitting] = useState(false);
 
   /* Each vaccine gets its own toggle + month/year state */
-  const [vaccineSelections, setVaccineSelections] = useState<
-    Record<string, VaccineSelection>
-  >(
-    Object.fromEntries(
-      VACCINE_NAMES.map((v) => [
-        v,
-        { selected: false, month: "", year: "", doses: 1 },
-      ])
-    )
-  );
+  const [vaccineSelections, setVaccineSelections] = useState<Record<string, VaccineSelection>>(emptyVaccineSelections);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    getValues,
     reset,
     formState: { errors },
   } = useForm<PatientFormData>({
@@ -115,6 +169,43 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
 
   const selectedConditions = watch("chronicConditions");
   const selectedRiskFactors = watch("riskFactors");
+
+  useEffect(() => {
+    if (!prefill) return;
+
+    const current = getValues();
+    reset({
+      ...current,
+      firstName: prefill.firstName ?? current.firstName,
+      lastName: prefill.lastName ?? current.lastName,
+      dateOfBirth:
+        prefill.dateOfBirth && isIsoDate(prefill.dateOfBirth)
+          ? prefill.dateOfBirth
+          : current.dateOfBirth,
+      gender: prefill.gender ?? current.gender,
+      vaccinations: current.vaccinations,
+    });
+
+    if (prefill.vaccinations && prefill.vaccinations.length > 0) {
+      const nextSelections = emptyVaccineSelections();
+      for (const item of prefill.vaccinations) {
+        const mappedName = item.product ? mapProductToVaccineName(item.product) : null;
+        if (!mappedName || !item.date || !isIsoDate(item.date)) continue;
+        const year = item.date.slice(0, 4);
+        const month = item.date.slice(5, 7);
+        const existing = nextSelections[mappedName];
+        nextSelections[mappedName] = {
+          selected: true,
+          month,
+          year,
+          doses: existing?.selected ? existing.doses + 1 : 1,
+        };
+      }
+      setVaccineSelections(nextSelections);
+    } else {
+      setVaccineSelections(emptyVaccineSelections());
+    }
+  }, [prefill, getValues, reset]);
 
   const toggleCondition = (condition: string) => {
     const current = selectedConditions || [];
@@ -199,14 +290,7 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
       });
       reset();
       /* Reset vaccine checklist */
-      setVaccineSelections(
-        Object.fromEntries(
-          VACCINE_NAMES.map((v) => [
-            v,
-            { selected: false, month: "", year: "", doses: 1 },
-          ])
-        )
-      );
+      setVaccineSelections(emptyVaccineSelections());
       onSuccess();
     } catch (error) {
       toast.error("Failed to create patient", {
