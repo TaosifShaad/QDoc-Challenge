@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { getPatientById, updatePatient } from "@/lib/store";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 const updatePatientSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -13,12 +14,44 @@ const updatePatientSchema = z.object({
   address: z.string().optional().or(z.literal("")),
 });
 
+type PatientWithVaccinations = Prisma.PatientGetPayload<{
+  include: { vaccinations: true };
+}>;
+
+function toPatientDto(patient: PatientWithVaccinations) {
+  return {
+    id: patient.id,
+    userId: patient.userId ?? undefined,
+    firstName: patient.firstName,
+    lastName: patient.lastName,
+    dateOfBirth: patient.dateOfBirth.toISOString().slice(0, 10),
+    gender: patient.gender,
+    email: patient.email ?? undefined,
+    phone: patient.phone ?? undefined,
+    address: patient.address ?? undefined,
+    chronicConditions: patient.chronicConditions,
+    riskFactors: patient.riskFactors,
+    vaccinations: patient.vaccinations.map((v) => ({
+      id: v.id,
+      vaccineName: v.vaccineName,
+      doseNumber: v.doseNumber,
+      dateGiven: v.dateGiven.toISOString().slice(0, 10),
+      provider: v.provider ?? undefined,
+    })),
+    createdAt: patient.createdAt.toISOString(),
+    updatedAt: patient.updatedAt.toISOString(),
+  };
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const patient = getPatientById(id);
+  const patient = await prisma.patient.findUnique({
+    where: { id },
+    include: { vaccinations: true },
+  });
 
   if (!patient) {
     return NextResponse.json(
@@ -27,7 +60,7 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(patient);
+  return NextResponse.json(toPatientDto(patient));
 }
 
 export async function PATCH(
@@ -40,7 +73,10 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const patient = getPatientById(id);
+  const patient = await prisma.patient.findUnique({
+    where: { id },
+    include: { vaccinations: true },
+  });
 
   if (!patient) {
     return NextResponse.json({ error: "Patient not found" }, { status: 404 });
@@ -61,8 +97,29 @@ export async function PATCH(
       );
     }
 
-    const updated = updatePatient(id, parsed.data);
-    return NextResponse.json(updated);
+    const updated = await prisma.patient.update({
+      where: { id },
+      data: {
+        ...(parsed.data.firstName !== undefined
+          ? { firstName: parsed.data.firstName }
+          : {}),
+        ...(parsed.data.lastName !== undefined
+          ? { lastName: parsed.data.lastName }
+          : {}),
+        ...(parsed.data.dateOfBirth !== undefined
+          ? { dateOfBirth: new Date(parsed.data.dateOfBirth) }
+          : {}),
+        ...(parsed.data.gender !== undefined ? { gender: parsed.data.gender } : {}),
+        ...(parsed.data.email !== undefined ? { email: parsed.data.email || null } : {}),
+        ...(parsed.data.phone !== undefined ? { phone: parsed.data.phone || null } : {}),
+        ...(parsed.data.address !== undefined
+          ? { address: parsed.data.address || null }
+          : {}),
+      },
+      include: { vaccinations: true },
+    });
+
+    return NextResponse.json(toPatientDto(updated));
   } catch {
     return NextResponse.json(
       { error: "Failed to update patient" },
