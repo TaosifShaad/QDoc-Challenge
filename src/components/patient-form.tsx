@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { Save, Loader2, Syringe, CheckCircle2, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   CHRONIC_CONDITIONS,
   RISK_FACTORS,
@@ -46,13 +45,54 @@ interface PatientFormProps {
   onSuccess: () => void;
 }
 
+/* ── Month names for selector ───────────────────────────────── */
+const MONTHS = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
+/* Generate year options (current down to 1940) */
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: currentYear - 1939 }, (_, i) =>
+  String(currentYear - i)
+);
+
+/* ── Vaccine checklist item state ─────────────────────────── */
+interface VaccineSelection {
+  selected: boolean;
+  month: string;
+  year: string;
+  doses: number;
+}
+
 export function PatientForm({ onSuccess }: PatientFormProps) {
   const [submitting, setSubmitting] = useState(false);
+
+  /* Each vaccine gets its own toggle + month/year state */
+  const [vaccineSelections, setVaccineSelections] = useState<
+    Record<string, VaccineSelection>
+  >(
+    Object.fromEntries(
+      VACCINE_NAMES.map((v) => [
+        v,
+        { selected: false, month: "", year: "", doses: 1 },
+      ])
+    )
+  );
 
   const {
     register,
     handleSubmit,
-    control,
     watch,
     setValue,
     reset,
@@ -71,11 +111,6 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
       riskFactors: [],
       vaccinations: [],
     },
-  });
-
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "vaccinations",
   });
 
   const selectedConditions = watch("chronicConditions");
@@ -105,7 +140,50 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
     }
   };
 
+  /* Toggle a vaccine on/off in the checklist */
+  const toggleVaccine = (name: string) => {
+    setVaccineSelections((prev) => ({
+      ...prev,
+      [name]: { ...prev[name], selected: !prev[name].selected },
+    }));
+  };
+
+  /* Update month/year/doses for a vaccine */
+  const updateVaccineField = (
+    name: string,
+    field: "month" | "year" | "doses",
+    value: string | number
+  ) => {
+    setVaccineSelections((prev) => ({
+      ...prev,
+      [name]: { ...prev[name], [field]: value },
+    }));
+  };
+
   const onSubmit = async (data: PatientFormData) => {
+    /* Build vaccinations array from the checklist selections */
+    const vaccinations = Object.entries(vaccineSelections)
+      .filter(([_, sel]) => sel.selected && sel.month && sel.year)
+      .map(([vaccineName, sel]) => ({
+        vaccineName,
+        doseNumber: sel.doses,
+        dateGiven: `${sel.year}-${sel.month}-15`,
+        provider: "",
+      }));
+
+    /* Validate: if a vaccine is checked but no month/year, warn */
+    const incomplete = Object.entries(vaccineSelections).filter(
+      ([_, sel]) => sel.selected && (!sel.month || !sel.year)
+    );
+    if (incomplete.length > 0) {
+      toast.error("Please complete vaccine dates", {
+        description: `${incomplete.map(([n]) => n).join(", ")} — select month and year.`,
+      });
+      return;
+    }
+
+    data.vaccinations = vaccinations;
+
     setSubmitting(true);
     try {
       const res = await fetch("/api/patients", {
@@ -120,6 +198,15 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
         description: `${data.firstName} ${data.lastName} has been added.`,
       });
       reset();
+      /* Reset vaccine checklist */
+      setVaccineSelections(
+        Object.fromEntries(
+          VACCINE_NAMES.map((v) => [
+            v,
+            { selected: false, month: "", year: "", doses: 1 },
+          ])
+        )
+      );
       onSuccess();
     } catch (error) {
       toast.error("Failed to create patient", {
@@ -129,6 +216,10 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
       setSubmitting(false);
     }
   };
+
+  const selectedCount = Object.values(vaccineSelections).filter(
+    (s) => s.selected
+  ).length;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -330,109 +421,131 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
         </Card>
       </div>
 
-      {/* Vaccination History */}
+      {/* ── Vaccination History Checklist ──────────────────────── */}
       <Card className="qdoc-card mt-6 border-none">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg text-[#12455a]">
-            Vaccination History
-          </CardTitle>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              append({
-                vaccineName: "",
-                doseNumber: 1,
-                dateGiven: "",
-                provider: "",
-              })
-            }
-            className="border-[#116cb6] text-[#116cb6] hover:bg-[#d6e6f2]"
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Vaccine
-          </Button>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg text-[#12455a]">
+                <Syringe className="h-5 w-5 text-[#116cb6]" />
+                Vaccination History
+              </CardTitle>
+              <p className="mt-1 text-sm text-[#5a7d8e]">
+                Have you received any of these vaccines? Select each one
+                you&apos;ve had and provide the approximate month &amp; year.
+              </p>
+            </div>
+            {selectedCount > 0 && (
+              <Badge
+                variant="outline"
+                className="border-[#c2e8a0] bg-[#e1f5c6] text-[#5a8a1e] text-xs"
+              >
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+                {selectedCount} selected
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {fields.length === 0 ? (
-            <p className="py-8 text-center text-sm text-[#5a7d8e]">
-              No vaccination records yet. Click &quot;Add Vaccine&quot; to add one.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {fields.map((field, index) => (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {VACCINE_NAMES.map((vaccineName) => {
+              const sel = vaccineSelections[vaccineName];
+              return (
                 <div
-                  key={field.id}
-                  className="rounded-lg border border-[#c2dcee] bg-[#f8fbfe] p-4"
+                  key={vaccineName}
+                  className={`rounded-xl border-2 p-3 transition-all duration-200 ${sel.selected
+                      ? "border-[#8fc748] bg-[#f5fbee] shadow-sm"
+                      : "border-[#eef4f9] bg-white hover:border-[#c2dcee]"
+                    }`}
                 >
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm font-medium text-[#116cb6]">
-                      Vaccine #{index + 1}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => remove(index)}
-                      className="h-8 w-8 p-0 text-[#d64545] hover:bg-[#fde8e8] hover:text-[#d64545]"
+                  {/* Toggle row */}
+                  <button
+                    type="button"
+                    onClick={() => toggleVaccine(vaccineName)}
+                    className="flex w-full items-center gap-2 text-left"
+                  >
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-colors ${sel.selected
+                          ? "border-[#8fc748] bg-[#8fc748] text-white"
+                          : "border-[#c2dcee] bg-white"
+                        }`}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                      <Label className="text-xs text-[#12455a]">
-                        Vaccine Name *
-                      </Label>
+                      {sel.selected && (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                    </div>
+                    <span
+                      className={`text-sm font-medium ${sel.selected ? "text-[#12455a]" : "text-[#5a7d8e]"
+                        }`}
+                    >
+                      {vaccineName}
+                    </span>
+                  </button>
+
+                  {/* Month/Year selectors — visible when selected */}
+                  {sel.selected && (
+                    <div className="mt-3 flex items-center gap-2 pl-7">
+                      <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-[#8ba8b8]" />
                       <select
-                        {...register(`vaccinations.${index}.vaccineName`)}
-                        className="mt-1 flex h-9 w-full rounded-md border border-[#c2dcee] bg-transparent px-3 py-1 text-sm focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
+                        value={sel.month}
+                        onChange={(e) =>
+                          updateVaccineField(
+                            vaccineName,
+                            "month",
+                            e.target.value
+                          )
+                        }
+                        className="flex h-8 w-full rounded-md border border-[#c2dcee] bg-white px-2 text-xs focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
                       >
-                        <option value="">Select vaccine</option>
-                        {VACCINE_NAMES.map((v) => (
-                          <option key={v} value={v}>
-                            {v}
+                        <option value="">Month</option>
+                        {MONTHS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
                           </option>
                         ))}
                       </select>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-[#12455a]">
-                        Dose Number *
-                      </Label>
-                      <Input
+                      <select
+                        value={sel.year}
+                        onChange={(e) =>
+                          updateVaccineField(
+                            vaccineName,
+                            "year",
+                            e.target.value
+                          )
+                        }
+                        className="flex h-8 w-24 flex-shrink-0 rounded-md border border-[#c2dcee] bg-white px-2 text-xs focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
+                      >
+                        <option value="">Year</option>
+                        {YEARS.map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                      </select>
+                      <input
                         type="number"
                         min={1}
-                        {...register(`vaccinations.${index}.doseNumber`)}
-                        className="mt-1 border-[#c2dcee]"
+                        max={10}
+                        value={sel.doses}
+                        onChange={(e) =>
+                          updateVaccineField(
+                            vaccineName,
+                            "doses",
+                            Number(e.target.value) || 1
+                          )
+                        }
+                        title="Number of doses received"
+                        className="flex h-8 w-16 flex-shrink-0 rounded-md border border-[#c2dcee] bg-white px-2 text-center text-xs focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
                       />
+                      <span className="flex-shrink-0 text-[10px] text-[#8ba8b8]">
+                        dose(s)
+                      </span>
                     </div>
-                    <div>
-                      <Label className="text-xs text-[#12455a]">
-                        Date Given *
-                      </Label>
-                      <Input
-                        type="date"
-                        {...register(`vaccinations.${index}.dateGiven`)}
-                        className="mt-1 border-[#c2dcee]"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-[#12455a]">
-                        Provider
-                      </Label>
-                      <Input
-                        {...register(`vaccinations.${index}.provider`)}
-                        placeholder="Dr. Smith"
-                        className="mt-1 border-[#c2dcee]"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 
