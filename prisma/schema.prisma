@@ -24,6 +24,7 @@ model Patient {
   id                String              @id @default(cuid())
   firstName         String
   lastName          String
+  dateOfBirth       DateTime
   gender            String
   email             String?
   phone             String?
