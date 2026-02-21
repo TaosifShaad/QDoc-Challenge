@@ -139,76 +139,63 @@ const mapProductToVaccineNames = (product: string): string[] => {
 
   const results: string[] = [];
 
-  // COVID-19
-  if (normalized.includes("pfizer") || normalized.includes("comirnaty")) {
-    results.push("COVID-19 (Pfizer-BioNTech)");
-  }
-  if (normalized.includes("moderna") || normalized.includes("spikevax")) {
-    results.push("COVID-19 (Moderna)");
-  }
-
-  // Influenza
+  // 1. Influenza (Flu)
   if (normalized.includes("influenza") || normalized.includes("flu") || normalized.includes("inf")) {
     results.push("Influenza (Flu)");
   }
 
-  // DTaP-IPV-Hib → Tdap + Polio (Manitoba combo vaccine)
+  // 2. DTaP-IPV-Hib and DTaP-IPV
   if (
     normalized.includes("dtap ipv hib") ||
-    normalized.includes("dtap ipv") ||
-    (normalized.includes("diphtheria") && normalized.includes("tetanus") && normalized.includes("pertussis") && normalized.includes("polio"))
+    normalized.includes("pediacel") ||
+    normalized.includes("pentacel") ||
+    (normalized.includes("diphtheria") && normalized.includes("tetanus") && normalized.includes("pertussis") && normalized.includes("polio") && normalized.includes("hib"))
   ) {
+    results.push("Tdap (Tetanus, Diphtheria, Pertussis)", "Polio (IPV)");
+  } else if (normalized.includes("dtap ipv") || normalized.includes("quadracel") || normalized.includes("kinrix")) {
     results.push("Tdap (Tetanus, Diphtheria, Pertussis)", "Polio (IPV)");
   } else if (normalized.includes("tdap") || normalized.includes("tetanus") || (normalized.includes("diphtheria") && normalized.includes("pertussis"))) {
     results.push("Tdap (Tetanus, Diphtheria, Pertussis)");
   }
 
-  // MMRV → MMR + Varicella (Manitoba combo)
-  if (normalized.includes("mmrv") || (normalized.includes("measles") && normalized.includes("varicella"))) {
+  // 3. MMRV (Measles, Mumps, Rubella, Varicella)
+  if (normalized.includes("mmrv") || normalized.includes("proquad") || normalized.includes("priorix tetra")) {
     results.push("MMR (Measles, Mumps, Rubella)", "Varicella (Chickenpox)");
   } else {
     if (normalized.includes("mmr") || (normalized.includes("measles") && normalized.includes("mumps"))) {
       results.push("MMR (Measles, Mumps, Rubella)");
     }
-    if (normalized.includes("varicella") || normalized.includes("chickenpox")) {
+    if (normalized.includes("varicella") || normalized.includes("chickenpox") || normalized.includes("varivax")) {
       results.push("Varicella (Chickenpox)");
     }
   }
 
-  // Meningococcal (Men-C-C)
-  if (normalized.includes("meningococcal") || normalized.includes("men c c") || normalized.includes("men c")) {
+  // 4. Meningococcal Conjugate C (Men-C-C)
+  if (normalized.includes("meningococcal") || normalized.includes("men c") || normalized.includes("menjugate") || normalized.includes("neissvac")) {
     results.push("Meningococcal");
   }
 
-  // Pneumococcal (Pneu-C-13)
-  if (normalized.includes("pneu c 13") || normalized.includes("pcv13") || normalized.includes("pneumococcal conjugate")) {
+  // 5. Pneumococcal Conjugate (Pneu-C-13 / Pneu-C-20)
+  if (normalized.includes("pneu c 13") || normalized.includes("pcv13") || normalized.includes("pcv20") || normalized.includes("pneumococcal conjugate") || normalized.includes("prevnar")) {
     results.push("Pneumococcal (PCV13)");
-  } else if (normalized.includes("ppsv23") || normalized.includes("pneumococcal polysaccharide")) {
+  } else if (normalized.includes("ppsv23") || normalized.includes("pneu p 23") || normalized.includes("pneumococcal polysaccharide") || normalized.includes("pneumovax")) {
     results.push("Pneumococcal (PPSV23)");
   } else if (normalized.includes("pneumococcal")) {
-    results.push("Pneumococcal (PCV13)");
+    results.push("Pneumococcal (PCV13)"); // Default to conjugate 
   }
 
-  // Rotavirus (Rota-1)
-  if (normalized.includes("rotavirus") || normalized.includes("rota 1") || normalized.includes("rota1")) {
-    results.push("Rotavirus");
-  }
-
-  // Hepatitis
+  // Keep other common mappings for manual entry compatibility
+  if (normalized.includes("rotavirus") || normalized.includes("rota")) results.push("Rotavirus");
   if (normalized.includes("hepatitis a") || normalized.includes("hep a")) results.push("Hepatitis A");
   if (normalized.includes("hepatitis b") || normalized.includes("hep b")) results.push("Hepatitis B");
+  if (normalized.includes("hpv") || normalized.includes("papillomavirus")) results.push("HPV (Human Papillomavirus)");
+  if (normalized.includes("shingles") || normalized.includes("zoster")) results.push("Shingles (Zoster)");
 
-  // HPV
-  if (normalized.includes("hpv") || normalized.includes("papillomavirus")) {
-    results.push("HPV (Human Papillomavirus)");
-  }
+  // COVID-19
+  if (normalized.includes("pfizer") || normalized.includes("comirnaty")) results.push("COVID-19 (Pfizer-BioNTech)");
+  if (normalized.includes("moderna") || normalized.includes("spikevax")) results.push("COVID-19 (Moderna)");
 
-  // Shingles
-  if (normalized.includes("shingles") || normalized.includes("zoster")) {
-    results.push("Shingles (Zoster)");
-  }
-
-  // Polio standalone (only if not already added via DTaP combo)
+  // Polio standalone
   if (!results.includes("Polio (IPV)") && (normalized.includes("polio") || normalized.includes("ipv"))) {
     results.push("Polio (IPV)");
   }

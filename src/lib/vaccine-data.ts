@@ -2,6 +2,13 @@
  * Smart Vaccine Recommendation Engine
  * Data sourced from Vaccine.xlsx — 6 vaccines with age, medical risk, and special group criteria.
  */
+import {
+  evaluateMMRV,
+  evaluatePneumococcal,
+  evaluateMenCC,
+  evaluateFlu,
+  evaluateDTaPIPVHib
+} from "./vaccine-rules";
 
 export interface VaccineInfo {
   name: string;
@@ -236,7 +243,8 @@ export interface VaccineRecommendation {
   lastGivenDate: string | null;
 }
 
-interface PatientProfile {
+export interface PatientProfile {
+
   dateOfBirth: string;
   gender: string;
   chronicConditions: string[];
@@ -345,11 +353,34 @@ export function getRecommendations(
 
     // Check vaccination history
     const records = getVaccinationRecords(patient, vaccine);
+
+    // Apply custom rules if applicable
+    let customRec: VaccineRecommendation | null = null;
+    const vName = normalizeVaccineName(vaccine.displayNames[0]);
+    if (vName.includes("mmr")) {
+      customRec = evaluateMMRV(patient, vaccine, records);
+    } else if (vName.includes("pneumococcal")) {
+      customRec = evaluatePneumococcal(patient, vaccine, records);
+    } else if (vName.includes("meningococcal")) {
+      customRec = evaluateMenCC(patient, vaccine, records);
+    } else if (vName.includes("influenza") || vName.includes("flu")) {
+      customRec = evaluateFlu(patient, vaccine, records);
+    } else if (vName.includes("tdap") || vName.includes("dtap")) {
+      customRec = evaluateDTaPIPVHib(patient, vaccine, records);
+    }
+
+    if (customRec) {
+      // if evaluating contraindicates completely, it might return null
+      recommendations.push(customRec);
+      continue;
+    }
+
+    // Generic fallback logic for other vaccines
     const completedDoses = records.length;
-    const lastRecord = records.sort(
-      (a, b) =>
-        new Date(b.dateGiven).getTime() - new Date(a.dateGiven).getTime()
-    )[0];
+    const sortedRecords = [...records].sort(
+      (a, b) => new Date(b.dateGiven).getTime() - new Date(a.dateGiven).getTime()
+    );
+    const lastRecord = sortedRecords[0];
 
     let status: VaccineRecommendation["status"];
     let remainingDoses: number;
@@ -400,6 +431,7 @@ export function getRecommendations(
       nextDueDate,
       lastGivenDate: lastRecord?.dateGiven || null,
     });
+
   }
 
   return recommendations;
@@ -456,6 +488,7 @@ export interface TimelineEntry {
   doseNumber: number;
   totalDoses: number;
   provider?: string;
+  reasons?: string[];
 }
 
 export function getTimeline(patient: PatientProfile): TimelineEntry[] {
@@ -491,6 +524,7 @@ export function getTimeline(patient: PatientProfile): TimelineEntry[] {
         type: rec.nextDueDate <= today ? "overdue" : "upcoming",
         doseNumber: rec.completedDoses + 1,
         totalDoses: rec.vaccine.totalDoses,
+        reasons: rec.reasons,
       });
     }
   }

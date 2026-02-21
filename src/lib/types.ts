@@ -59,6 +59,8 @@ export const CHRONIC_CONDITIONS = [
   "Liver Disease",
   "Autoimmune Disorder",
   "Hypertension",
+  "Asplenia",
+  "Cochlear Implant",
 ] as const;
 
 export const RISK_FACTORS = [

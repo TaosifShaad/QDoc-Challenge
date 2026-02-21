@@ -9,17 +9,20 @@ import {
   Bell,
   Send,
   CheckCircle2,
+  AlertCircle,
   AlertTriangle,
   Clock,
   Syringe,
   Loader2,
   Mail,
+  Calendar,
   CalendarClock,
 } from "lucide-react";
 import type { Patient } from "@/lib/types";
 import {
-  getRecommendations,
+  getNeededVaccines,
   type VaccineRecommendation,
+  type PatientProfile,
 } from "@/lib/vaccine-data";
 import { motion } from "framer-motion";
 
@@ -31,42 +34,71 @@ interface ReminderItem {
   dueDate: string;
   doseNumber: number;
   daysUntil: number;
+  reasons: string[];
   status: "overdue" | "needed" | "upcoming";
 }
 
 export default function RemindersPage() {
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingAll, setSendingAll] = useState(false);
-  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
-  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [sendingState, setSendingState] = useState<Record<string, "sending" | "sent" | "error">>({});
   const [markingComplete, setMarkingComplete] = useState<Set<string>>(new Set());
 
+  const getReminderId = (r: ReminderItem) =>
+    `${r.patientId}-${r.vaccineName}-${r.doseNumber}`;
 
-  useEffect(() => {
-    async function fetchPatients() {
-      try {
-        const res = await fetch("/api/patients?mine=true");
-        if (res.ok) {
-          const data = await res.json();
-          setPatients(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch patients:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchPatients();
-  }, []);
-
-  const refetchPatients = async () => {
+  const fetchAndGenerateReminders = async () => {
+    setLoading(true);
     try {
       const res = await fetch("/api/patients?mine=true");
-      if (res.ok) setPatients(await res.json());
-    } catch { }
+      if (!res.ok) throw new Error("Failed to fetch patients");
+      const fetchedPatients: Patient[] = await res.json();
+
+      const items: ReminderItem[] = [];
+      for (const p of fetchedPatients) {
+        const profile: PatientProfile = {
+          dateOfBirth: p.dateOfBirth,
+          gender: p.gender,
+          chronicConditions: p.chronicConditions || [],
+          riskFactors: p.riskFactors || [],
+          vaccinations: p.vaccinations || [],
+        };
+
+        const needed = getNeededVaccines(profile);
+        for (const rec of needed) {
+          if (rec.nextDueDate) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(rec.nextDueDate);
+            const diffTime = due.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            items.push({
+              patientId: p.id || "",
+              patientName: `${p.firstName} ${p.lastName}`,
+              patientEmail: p.email || "",
+              vaccineName: rec.vaccine.displayNames[0],
+              dueDate: rec.nextDueDate,
+              doseNumber: rec.completedDoses + 1,
+              daysUntil: diffDays,
+              reasons: rec.reasons,
+              status: rec.status as "overdue" | "needed" | "upcoming",
+            });
+          }
+        }
+      }
+      setReminders(items);
+    } catch (error) {
+      console.error("Failed to load Reminders:", error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    fetchAndGenerateReminders();
+  }, []);
 
   const markVaccineComplete = async (item: ReminderItem) => {
     const rid = getReminderId(item);
@@ -82,7 +114,7 @@ export default function RemindersPage() {
         }),
       });
       if (res.ok) {
-        await refetchPatients();
+        await fetchAndGenerateReminders();
       }
     } catch (err) {
       console.error("Failed to mark vaccine:", err);
@@ -95,49 +127,8 @@ export default function RemindersPage() {
     }
   };
 
-
-  // Build reminder items from all patients
-  const reminderItems: ReminderItem[] = patients.flatMap((patient) => {
-    const recs = getRecommendations({
-      dateOfBirth: patient.dateOfBirth,
-      gender: patient.gender,
-      chronicConditions: patient.chronicConditions || [],
-      riskFactors: patient.riskFactors || [],
-      vaccinations: patient.vaccinations || [],
-    });
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return recs
-      .filter(
-        (r) =>
-          r.nextDueDate &&
-          r.remainingDoses > 0 &&
-          r.status !== "completed"
-      )
-      .map((rec) => {
-        const due = new Date(rec.nextDueDate!);
-        due.setHours(0, 0, 0, 0);
-        const daysUntil = Math.round(
-          (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        return {
-          patientId: patient.id || "",
-          patientName: `${patient.firstName} ${patient.lastName}`,
-          patientEmail: patient.email || "",
-          vaccineName: rec.vaccine.displayNames[0],
-          dueDate: rec.nextDueDate!,
-          doseNumber: rec.completedDoses + 1,
-          daysUntil,
-          status: rec.status as "overdue" | "needed" | "upcoming",
-        };
-      });
-  });
-
   // Sort: overdue first, then by days until due
-  const sortedReminders = [...reminderItems].sort((a, b) => {
+  const sortedReminders = [...reminders].sort((a, b) => {
     if (a.status === "overdue" && b.status !== "overdue") return -1;
     if (b.status === "overdue" && a.status !== "overdue") return 1;
     return a.daysUntil - b.daysUntil;
@@ -151,36 +142,24 @@ export default function RemindersPage() {
     (r) => r.daysUntil > 10
   );
 
-  const getReminderId = (r: ReminderItem) =>
-    `${r.patientId}-${r.vaccineName}-${r.dueDate}`;
-
   const sendReminder = async (item: ReminderItem) => {
     const rid = getReminderId(item);
     if (!item.patientEmail) {
-      setErrors((prev) => ({
-        ...prev,
-        [rid]: "No email address on file for this patient",
-      }));
+      setSendingState((prev) => ({ ...prev, [rid]: "error" }));
       return;
     }
 
-    setSendingIds((prev) => new Set(prev).add(rid));
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next[rid];
-      return next;
-    });
+    setSendingState((prev) => ({ ...prev, [rid]: "sending" }));
 
     try {
       const res = await fetch("/api/reminders/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: item.patientEmail,
+          toEmail: item.patientEmail,
           patientName: item.patientName,
           vaccineName: item.vaccineName,
           dueDate: item.dueDate,
-          doseNumber: item.doseNumber,
         }),
       });
 
@@ -189,25 +168,16 @@ export default function RemindersPage() {
         throw new Error(data.message || "Failed to send");
       }
 
-      setSentIds((prev) => new Set(prev).add(rid));
+      setSendingState((prev) => ({ ...prev, [rid]: "sent" }));
     } catch (err: any) {
-      setErrors((prev) => ({
-        ...prev,
-        [rid]: err.message || "Failed to send reminder",
-      }));
-    } finally {
-      setSendingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(rid);
-        return next;
-      });
+      setSendingState((prev) => ({ ...prev, [rid]: "error" }));
     }
   };
 
   const sendAllUrgent = async () => {
     setSendingAll(true);
     const toSend = urgentReminders.filter(
-      (r) => r.patientEmail && !sentIds.has(getReminderId(r))
+      (r) => r.patientEmail && sendingState[getReminderId(r)] !== "sent"
     );
     for (const item of toSend) {
       await sendReminder(item);
@@ -231,9 +201,11 @@ export default function RemindersPage() {
 
   const renderReminderCard = (item: ReminderItem, index: number) => {
     const rid = getReminderId(item);
-    const isSending = sendingIds.has(rid);
-    const isSent = sentIds.has(rid);
-    const error = errors[rid];
+    const isSending = sendingState[rid] === "sending";
+    const isSent = sendingState[rid] === "sent";
+    const error = sendingState[rid] === "error" ? "Failed to send" : null;
+
+    const isHighPriority = item.reasons.some(r => r.includes("HIGH PRIORITY"));
 
     return (
       <motion.div
@@ -245,7 +217,7 @@ export default function RemindersPage() {
         <div
           className={`rounded-xl border p-4 ${item.daysUntil < 0
             ? "border-[#e57d7d] bg-[#fef5f5]"
-            : item.daysUntil <= 3
+            : isHighPriority
               ? "border-[#f8d586] bg-[#fffcf5]"
               : "border-[#c2dcee] bg-[#f8fbfe]"
             }`}

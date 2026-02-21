@@ -291,11 +291,21 @@ export default function TimelinePage() {
                                         className={`flex-1 rounded-lg border p-3 ${styles.card}`}
                                       >
                                         <div className="flex items-center justify-between mb-1">
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 flex-wrap">
                                             <Syringe className="h-3.5 w-3.5 text-[#5a7d8e]" />
                                             <span className="font-semibold text-sm text-[#12455a]">
                                               {entry.vaccineName}
                                             </span>
+                                            {entry.reasons && entry.reasons.some((r: string) => r.includes("HIGH PRIORITY")) && (
+                                              <Badge className="text-[10px] bg-red-100 text-red-700 border border-red-200">
+                                                High Priority
+                                              </Badge>
+                                            )}
+                                            {entry.reasons && entry.reasons.some((r: string) => r.includes("Alert")) && (
+                                              <Badge className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200">
+                                                Special Alert
+                                              </Badge>
+                                            )}
                                           </div>
                                           <Badge
                                             variant="outline"
