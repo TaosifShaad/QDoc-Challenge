@@ -50,6 +50,24 @@ export function deletePatient(id: string): boolean {
   return true;
 }
 
+export function updatePatient(
+  id: string,
+  data: Partial<Omit<Patient, "id" | "createdAt" | "updatedAt">>
+): Patient | undefined {
+  const idx = patients.findIndex((p) => p.id === id);
+  if (idx === -1) return undefined;
+
+  const existing = patients[idx];
+  const updated: Patient = {
+    ...existing,
+    ...data,
+    updatedAt: new Date().toISOString(),
+  };
+
+  patients[idx] = updated;
+  return updated;
+}
+
 // --- User Store ---
 let users: User[] = [];
 let nextUserId = 1;

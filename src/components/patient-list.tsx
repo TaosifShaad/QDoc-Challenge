@@ -59,10 +59,10 @@ export function PatientList({ patients, loading }: PatientListProps) {
             <User className="h-8 w-8 text-[#116cb6]" />
           </div>
           <h3 className="text-lg font-semibold text-[#12455a]">
-            No patients yet
+            No patient profile yet
           </h3>
           <p className="mt-1 text-sm text-[#5a7d8e]">
-            Add a patient using the form above, import a CSV, or load mock profiles.
+            Your patient profile is not available yet.
           </p>
         </CardContent>
       </Card>
@@ -73,7 +73,7 @@ export function PatientList({ patients, loading }: PatientListProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-[#12455a]">
-          All Patients
+          Patient Profile
           <span className="ml-2 text-sm font-normal text-[#5a7d8e]">
             ({patients.length})
           </span>

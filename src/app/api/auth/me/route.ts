@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getUserById } from "@/lib/store";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await getSession();
@@ -12,7 +12,9 @@ export async function GET() {
     );
   }
 
-  const user = getUserById(session.userId);
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+  });
   if (!user) {
     return NextResponse.json(
       { error: "User not found" },
@@ -25,6 +27,7 @@ export async function GET() {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
-    createdAt: user.createdAt,
+    dateOfBirth: user.dateOfBirth.toISOString(),
+    createdAt: user.createdAt.toISOString(),
   });
 }

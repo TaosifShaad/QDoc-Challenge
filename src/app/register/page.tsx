@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const { register } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -36,7 +37,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await register(firstName, lastName, email, password);
+      await register(firstName, lastName, email, password, dateOfBirth);
     } catch (err: any) {
       setError(err.message || "Registration failed");
     } finally {
@@ -93,6 +94,20 @@ export default function RegisterPage() {
                   className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
                 />
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="dateOfBirth" className="text-[#12455a]">
+                Date of Birth
+              </Label>
+              <Input
+                id="dateOfBirth"
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                required
+                className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+              />
             </div>
 
             <div>

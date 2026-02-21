@@ -15,6 +15,7 @@ interface AuthUser {
   email: string;
   firstName: string;
   lastName: string;
+  dateOfBirth?: string;
   createdAt: string;
 }
 
@@ -26,7 +27,8 @@ interface AuthContextType {
     firstName: string,
     lastName: string,
     email: string,
-    password: string
+    password: string,
+    dateOfBirth: string
   ) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -80,12 +82,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firstName: string,
     lastName: string,
     email: string,
-    password: string
+    password: string,
+    dateOfBirth: string
   ) => {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, email, password }),
+      body: JSON.stringify({ firstName, lastName, email, password, dateOfBirth }),
     });
 
     if (!res.ok) {

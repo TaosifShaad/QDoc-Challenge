@@ -12,9 +12,11 @@ model User {
   email        String    @unique
   firstName    String
   lastName     String
+  dateOfBirth  DateTime
   passwordHash String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  userType     UserType  @default(PATIENT)
   patients     Patient[]
 }
 
@@ -22,7 +24,6 @@ model Patient {
   id                String              @id @default(cuid())
   firstName         String
   lastName          String
-  dateOfBirth       DateTime
   gender            String
   email             String?
   phone             String?
@@ -49,4 +50,9 @@ model VaccinationRecord {
   createdAt   DateTime @default(now())
 
   @@index([patientId])
+}
+
+enum UserType {
+  PATIENT
+  ADMIN
 }
