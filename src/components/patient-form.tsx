@@ -26,6 +26,14 @@ const vaccinationSchema = z.object({
   provider: z.string().optional(),
 });
 
+const dueImmunizationSchema = z.object({
+  vaccineName: z.string().optional(),
+  mbCode: z.string().optional(),
+  doseNumber: z.number().optional(),
+  dueDate: z.string().optional(),
+  status: z.string().optional(),
+});
+
 const patientSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -34,9 +42,17 @@ const patientSchema = z.object({
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().optional(),
   address: z.string().optional(),
+  personalHealthNumber: z.string().optional(),
+  recipientRelationship: z.string().optional(),
+  streetAddress: z.string().optional(),
+  city: z.string().optional(),
+  province: z.string().optional(),
+  postalCode: z.string().optional(),
+  ageAtPrinting: z.string().optional(),
   chronicConditions: z.array(z.string()),
   riskFactors: z.array(z.string()),
   vaccinations: z.array(vaccinationSchema),
+  nextImmunizationsDue: z.array(dueImmunizationSchema).optional(),
 });
 
 type PatientFormData = z.infer<typeof patientSchema>;
@@ -48,6 +64,9 @@ interface PatientFormProps {
 
 export interface OcrVaccinationPrefill {
   date?: string;
+  dates?: string[];
+  vaccineName?: string;
+  mbCode?: string;
   product?: string;
   lot?: string;
 }
@@ -57,7 +76,22 @@ export interface PatientFormPrefill {
   lastName?: string;
   dateOfBirth?: string;
   gender?: string;
+  email?: string;
+  personalHealthNumber?: string;
+  recipientRelationship?: string;
+  streetAddress?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  ageAtPrinting?: string;
   vaccinations?: OcrVaccinationPrefill[];
+  nextImmunizationsDue?: Array<{
+    vaccineName?: string;
+    mbCode?: string;
+    doseNumber?: number;
+    dueDate?: string;
+    status?: string;
+  }>;
 }
 
 /* ── Month names for selector ───────────────────────────────── */
@@ -161,9 +195,17 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
       email: "",
       phone: "",
       address: "",
+      personalHealthNumber: "",
+      recipientRelationship: "",
+      streetAddress: "",
+      city: "",
+      province: "",
+      postalCode: "",
+      ageAtPrinting: "",
       chronicConditions: [],
       riskFactors: [],
       vaccinations: [],
+      nextImmunizationsDue: [],
     },
   });
 
@@ -183,16 +225,31 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
           ? prefill.dateOfBirth
           : current.dateOfBirth,
       gender: prefill.gender ?? current.gender,
+      email: prefill.email ?? current.email,
+      personalHealthNumber:
+        prefill.personalHealthNumber ?? current.personalHealthNumber,
+      recipientRelationship:
+        prefill.recipientRelationship ?? current.recipientRelationship,
+      streetAddress: prefill.streetAddress ?? current.streetAddress,
+      city: prefill.city ?? current.city,
+      province: prefill.province ?? current.province,
+      postalCode: prefill.postalCode ?? current.postalCode,
+      ageAtPrinting: prefill.ageAtPrinting ?? current.ageAtPrinting,
+      nextImmunizationsDue:
+        prefill.nextImmunizationsDue ?? current.nextImmunizationsDue,
       vaccinations: current.vaccinations,
     });
 
     if (prefill.vaccinations && prefill.vaccinations.length > 0) {
       const nextSelections = emptyVaccineSelections();
       for (const item of prefill.vaccinations) {
-        const mappedName = item.product ? mapProductToVaccineName(item.product) : null;
-        if (!mappedName || !item.date || !isIsoDate(item.date)) continue;
-        const year = item.date.slice(0, 4);
-        const month = item.date.slice(5, 7);
+        const mappedName = mapProductToVaccineName(
+          item.product || item.vaccineName || ""
+        );
+        const resolvedDate = item.date ?? item.dates?.[0];
+        if (!mappedName || !resolvedDate || !isIsoDate(resolvedDate)) continue;
+        const year = resolvedDate.slice(0, 4);
+        const month = resolvedDate.slice(5, 7);
         const existing = nextSelections[mappedName];
         nextSelections[mappedName] = {
           selected: true,
@@ -432,8 +489,54 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
               />
             </div>
             <div>
+              <Label htmlFor="streetAddress" className="text-[#12455a]">
+                Street Address
+              </Label>
+              <Input
+                id="streetAddress"
+                {...register("streetAddress")}
+                placeholder="123 Main St"
+                className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="city" className="text-[#12455a]">
+                  City
+                </Label>
+                <Input
+                  id="city"
+                  {...register("city")}
+                  placeholder="Winnipeg"
+                  className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+                />
+              </div>
+              <div>
+                <Label htmlFor="province" className="text-[#12455a]">
+                  Province
+                </Label>
+                <Input
+                  id="province"
+                  {...register("province")}
+                  placeholder="MB"
+                  className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+                />
+              </div>
+              <div>
+                <Label htmlFor="postalCode" className="text-[#12455a]">
+                  Postal Code
+                </Label>
+                <Input
+                  id="postalCode"
+                  {...register("postalCode")}
+                  placeholder="R3C 0V1"
+                  className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+                />
+              </div>
+            </div>
+            <div>
               <Label htmlFor="address" className="text-[#12455a]">
-                Address
+                Address (Legacy / Optional)
               </Label>
               <Textarea
                 id="address"
@@ -443,6 +546,73 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
                 rows={3}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="qdoc-card border-none">
+          <CardHeader>
+            <CardTitle className="text-lg text-[#12455a]">
+              Administrative Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="personalHealthNumber" className="text-[#12455a]">
+                Personal Health Number (PHN)
+              </Label>
+              <Input
+                id="personalHealthNumber"
+                {...register("personalHealthNumber")}
+                placeholder="122123015"
+                className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+              />
+            </div>
+            <div>
+              <Label htmlFor="recipientRelationship" className="text-[#12455a]">
+                Recipient Relationship
+              </Label>
+              <Input
+                id="recipientRelationship"
+                {...register("recipientRelationship")}
+                placeholder="To the Parent/Guardian of"
+                className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+              />
+            </div>
+            <div>
+              <Label htmlFor="ageAtPrinting" className="text-[#12455a]">
+                Age At Date Of Printing
+              </Label>
+              <Input
+                id="ageAtPrinting"
+                {...register("ageAtPrinting")}
+                placeholder="1 yrs 8 mos"
+                className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
+              />
+            </div>
+            {(watch("nextImmunizationsDue") || []).length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-[#12455a]">
+                  Next Immunizations Due (from OCR)
+                </p>
+                <div className="mt-2 space-y-2">
+                  {(watch("nextImmunizationsDue") || []).map((due, idx) => (
+                    <div
+                      key={`${due.vaccineName || "due"}-${idx}`}
+                      className="rounded-md border border-[#c2dcee] bg-[#f8fbfe] p-2 text-xs text-[#5a7d8e]"
+                    >
+                      <p>
+                        {due.vaccineName || "Vaccine"} {due.mbCode ? `(${due.mbCode})` : ""}
+                      </p>
+                      <p>
+                        {due.dueDate || "No due date"}
+                        {due.doseNumber ? ` • Dose ${due.doseNumber}` : ""}
+                        {due.status ? ` • ${due.status}` : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

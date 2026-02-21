@@ -57,6 +57,14 @@ type ExtractedFields = {
   firstName?: string;
   lastName?: string;
   dateOfBirth?: string;
+  email?: string;
+  personalHealthNumber?: string;
+  recipientRelationship?: string;
+  streetAddress?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  ageAtPrinting?: string;
   documentTitle?: string;
   issuingProvince?: string;
   country?: string;
@@ -67,8 +75,19 @@ type ExtractedFields = {
 
 type ExtractedVaccination = {
   date?: string;
+  dates?: string[];
+  vaccineName?: string;
+  mbCode?: string;
   product?: string;
   lot?: string;
+};
+
+type ExtractedDueImmunization = {
+  vaccineName?: string;
+  mbCode?: string;
+  doseNumber?: number;
+  dueDate?: string;
+  status?: string;
 };
 
 const MONTH_MAP: Record<string, number> = {
@@ -134,6 +153,21 @@ const PROVINCES = [
 ];
 
 const COUNTRIES = ["Canada", "United States", "USA", "U.S.A."];
+const PROVINCE_CODES: Record<string, string> = {
+  AB: "Alberta",
+  BC: "British Columbia",
+  MB: "Manitoba",
+  NB: "New Brunswick",
+  NL: "Newfoundland and Labrador",
+  NS: "Nova Scotia",
+  ON: "Ontario",
+  PE: "Prince Edward Island",
+  QC: "Quebec",
+  SK: "Saskatchewan",
+  NT: "Northwest Territories",
+  NU: "Nunavut",
+  YT: "Yukon",
+};
 
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
@@ -161,6 +195,27 @@ function parseDateToIso(input: string): string | null {
   const normalized = text
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+
+  const ocrFriendly = normalized
+    .toLowerCase()
+    .replace(/ap1/g, "apr")
+    .replace(/apl/g, "apr")
+    .replace(/5ep/g, "sep")
+    .replace(/0ct/g, "oct")
+    .replace(/ju1/g, "jul")
+    .replace(/1st/g, "1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const yearMonthDayWordMatch = ocrFriendly.match(
+    /\b((?:19|20)\d{2})\s*[-\/ ]?\s*([a-z]{3,12})\s*[-\/ ]?\s*(\d{1,2})\b/
+  );
+  if (yearMonthDayWordMatch) {
+    const year = Number(yearMonthDayWordMatch[1]);
+    const month = MONTH_MAP[yearMonthDayWordMatch[2].toLowerCase()];
+    const day = Number(yearMonthDayWordMatch[3]);
+    if (month) return isoFromParts(year, month, day);
+  }
 
   const bilingualMonthMatch = normalized.match(
     /\b(\d{1,2})\s+([A-Za-z]{3,12})\s*\/\s*([A-Za-z]{3,12})\s+(\d{2,4})\b/
@@ -197,6 +252,26 @@ function parseDateToIso(input: string): string | null {
   return null;
 }
 
+function extractDatesFromText(input: string): string[] {
+  const text = input.replace(/\r/g, " ");
+  const patterns = [
+    /\b(?:19|20)\d{2}\s*[-\/ ]?\s*[A-Za-z0-9]{3,12}\s*[-\/ ]?\s*\d{1,2}\b/g,
+    /\b\d{1,2}\s*[-\/ ]?\s*[A-Za-z0-9]{3,12}\s*[-\/ ]?\s*(?:19|20)\d{2}\b/g,
+    /\b(?:19|20)\d{2}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/g,
+    /\b\d{1,2}[\/\-]\d{1,2}[\/\-](?:19|20)\d{2}\b/g,
+  ];
+
+  const dates = new Set<string>();
+  for (const pattern of patterns) {
+    const matches = text.match(pattern) ?? [];
+    for (const candidate of matches) {
+      const parsed = parseDateToIso(candidate);
+      if (parsed) dates.add(parsed);
+    }
+  }
+  return Array.from(dates).sort();
+}
+
 function splitName(fullName: string): { firstName?: string; lastName?: string } {
   const clean = fullName.replace(/\s+/g, " ").trim();
   if (!clean) return {};
@@ -219,6 +294,7 @@ function cleanLine(line: string): string {
 function parseOcrText(rawText: string): {
   fields: ExtractedFields;
   vaccinations: ExtractedVaccination[];
+  nextImmunizationsDue: ExtractedDueImmunization[];
   warnings: string[];
 } {
   const warnings: string[] = [];
@@ -241,11 +317,62 @@ function parseOcrText(rawText: string): {
     fields.lastName = split.lastName;
   }
 
+  // Manitoba card layout often has the name on the line after "To the Parent/Guardian of:"
+  if (!fields.fullName) {
+    const relationshipLineIndex = lines.findIndex((line) =>
+      /to the parent\/guardian of|au parent\/tuteur/i.test(line)
+    );
+    if (relationshipLineIndex >= 0 && lines[relationshipLineIndex + 1]) {
+      const candidate = cleanLine(lines[relationshipLineIndex + 1]);
+      if (candidate && /[a-z]/i.test(candidate)) {
+        fields.fullName = candidate;
+        const split = splitName(candidate);
+        fields.firstName = split.firstName;
+        fields.lastName = split.lastName;
+      }
+    }
+  }
+
   const dobMatch = text.match(
     /\b(?:Date\s*of\s*Birth|DOB|Date\s*de\s*naissance|Naissance)\s*[:\-]?\s*([^\n]+)/i
   );
   if (dobMatch?.[1]) {
     fields.dateOfBirth = parseDateToIso(dobMatch[1]) ?? undefined;
+  }
+
+  const emailMatch = text.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+  if (emailMatch) fields.email = emailMatch[0];
+
+  const phnMatch = text.match(
+    /\b(?:Personal\s*Health\s*Number|PHN|Num[ée]ro\s*de\s*sant[ée]\s*personnel)\s*[:\-]?\s*([A-Z0-9\- ]{6,})/i
+  );
+  if (phnMatch?.[1]) fields.personalHealthNumber = cleanLine(phnMatch[1]);
+
+  const relationshipMatch = text.match(
+    /\b(To\s+the\s+[^\n:]{0,40}of|Au\s+[^\n:]{0,40}de)\s*:\s*([^\n]+)/i
+  );
+  if (relationshipMatch?.[1]) fields.recipientRelationship = cleanLine(relationshipMatch[1]);
+
+  const ageMatch = text.match(/\bAge\s*[:\-]\s*([^\n]+)/i);
+  if (ageMatch?.[1]) fields.ageAtPrinting = cleanLine(ageMatch[1]);
+
+  const postalMatch = text.match(/\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i);
+  if (postalMatch) fields.postalCode = `${postalMatch[1].toUpperCase()} ${postalMatch[2].toUpperCase()}`;
+
+  const cityProvPostalMatch = text.match(
+    /\b([A-Za-z .'-]+?)\s*[,\-]?\s*(AB|BC|MB|NB|NL|NS|ON|PE|QC|SK|NT|NU|YT)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)\b/i
+  );
+  if (cityProvPostalMatch) {
+    fields.city = cleanLine(cityProvPostalMatch[1]);
+    fields.province = PROVINCE_CODES[cityProvPostalMatch[2].toUpperCase()] ?? cityProvPostalMatch[2].toUpperCase();
+    fields.postalCode = cityProvPostalMatch[3].toUpperCase().replace(/\s?([A-Z]\d[A-Z]\d[A-Z]\d)$/, " $1");
+  }
+
+  const streetMatch = text.match(/\b(?:Street\s*Address|Address|Adresse)\s*[:\-]\s*([^\n]+)/i);
+  if (streetMatch?.[1]) fields.streetAddress = cleanLine(streetMatch[1]);
+  if (!fields.streetAddress) {
+    const possibleStreet = lines.find((line) => /^\d{1,6}\s+[A-Za-z]/.test(line));
+    if (possibleStreet) fields.streetAddress = cleanLine(possibleStreet);
   }
 
   fields.documentTitle = lines.find((line) =>
@@ -284,6 +411,7 @@ function parseOcrText(rawText: string): {
   };
 
   const vaccinations: ExtractedVaccination[] = [];
+  const nextImmunizationsDue: ExtractedDueImmunization[] = [];
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
@@ -314,7 +442,15 @@ function parseOcrText(rawText: string): {
           !/vaccines?\s+administered|page\s+\d+\/\d+|issued/i.test(candidate)
       );
 
-    vaccinations.push({ date, product, lot });
+    const mbCodeMatch = joined.match(/\b([A-Z]{2,}(?:-[A-Z0-9]+)+|[A-Z]{3,6})\b/);
+    vaccinations.push({
+      date,
+      dates: date ? [date] : undefined,
+      mbCode: mbCodeMatch?.[1],
+      vaccineName: product,
+      product,
+      lot,
+    });
     i = j - 1;
   }
 
@@ -329,6 +465,8 @@ function parseOcrText(rawText: string): {
       const lot = cleanLine(match[3]);
       vaccinations.push({
         date,
+        dates: date ? [date] : undefined,
+        vaccineName: product || undefined,
         product: product || undefined,
         lot: lot || undefined,
       });
@@ -336,22 +474,94 @@ function parseOcrText(rawText: string): {
     }
   }
 
+  // Table-style parser for "Immunization History" rows with multiple dates.
+  const historyStart = lines.findIndex((line) => /immunization history/i.test(line));
+  const dueStart = lines.findIndex((line) => /next immunizations due/i.test(line));
+  if (historyStart >= 0) {
+    const historyEnd = dueStart > historyStart ? dueStart : lines.length;
+    for (let i = historyStart + 1; i < historyEnd; i += 1) {
+      const line = lines[i];
+      if (!line || /mb code|date of immunization|note:/i.test(line)) continue;
+      const dates = extractDatesFromText(line);
+      if (dates.length === 0) continue;
+
+      const mbCodeMatch = line.match(/\b([A-Z]{2,}(?:-[A-Z0-9]+)+|[A-Z][A-Za-z0-9-]{2,12})\b/);
+      const stripped = line
+        .replace(/\b(?:19|20)\d{2}\s*[-\/ ]?\s*[A-Za-z0-9]{3,12}\s*[-\/ ]?\s*\d{1,2}\b/g, " ")
+        .replace(/\b\d{1,2}\s*[-\/ ]?\s*[A-Za-z0-9]{3,12}\s*[-\/ ]?\s*(?:19|20)\d{2}\b/g, " ")
+        .replace(/\b(?:19|20)\d{2}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/g, " ")
+        .replace(/\b\d{1,2}[\/\-]\d{1,2}[\/\-](?:19|20)\d{2}\b/g, " ")
+        .replace(/\b([A-Z]{2,}(?:-[A-Z0-9]+)+|[A-Z][A-Za-z0-9-]{2,12})\b/g, " ")
+        .replace(/\|/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      vaccinations.push({
+        date: dates[0],
+        dates,
+        vaccineName: stripped || undefined,
+        mbCode: mbCodeMatch?.[1],
+        product: stripped || undefined,
+      });
+    }
+  }
+
+  if (dueStart >= 0) {
+    for (let i = dueStart + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (/issued|delivre|page\s+\d+\/\d+|ce document|this document/i.test(line)) break;
+      if (/mb code|dose number|due date|status|note:/i.test(line)) continue;
+      const dueDates = extractDatesFromText(line);
+      const dueDate = dueDates[0];
+      if (!dueDate) continue;
+      const doseMatch = line.match(/\bdose\s*[:#]?\s*(\d+)\b/i);
+      const statusMatch = line.match(/\b(overdue|due|en retard)\b/i);
+      const mbCodeMatch = line.match(/\b([A-Z]{2,}(?:-[A-Z0-9]+)+|[A-Z]{3,6})\b/);
+      const vaccineName = line
+        .replace(/\b(overdue|due|en retard)\b/gi, "")
+        .replace(/\bdose\s*[:#]?\s*\d+\b/gi, "")
+        .replace(/\b(?:19|20)\d{2}\s*[-\/ ]?\s*[A-Za-z0-9]{3,12}\s*[-\/ ]?\s*\d{1,2}\b/g, "")
+        .replace(/\b\d{1,2}\s*[-\/ ]?\s*[A-Za-z0-9]{3,12}\s*[-\/ ]?\s*(?:19|20)\d{2}\b/g, "")
+        .replace(/\b(?:19|20)\d{2}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/g, "")
+        .replace(/\b(AB|BC|MB|NB|NL|NS|ON|PE|QC|SK|NT|NU|YT)\b/g, "")
+        .replace(/\b([A-Z]{2,}(?:-[A-Z0-9]+)+|[A-Z]{3,6})\b/g, "")
+        .trim();
+
+      nextImmunizationsDue.push({
+        vaccineName: vaccineName || undefined,
+        mbCode: mbCodeMatch?.[1],
+        doseNumber: doseMatch ? Number(doseMatch[1]) : undefined,
+        dueDate,
+        status: statusMatch?.[1],
+      });
+    }
+  }
+
+  const dedupedVaccinations = Array.from(
+    new Map(
+      vaccinations.map((v) => [
+        `${v.vaccineName || v.product || "unknown"}|${(v.dates || (v.date ? [v.date] : [])).join(",")}|${v.mbCode || ""}`,
+        v,
+      ])
+    ).values()
+  );
+
   if (!fields.firstName && !fields.lastName) {
     warnings.push("Could not confidently extract patient name.");
   }
   if (!fields.dateOfBirth) {
     warnings.push("Could not confidently extract date of birth.");
   }
-  if (vaccinations.length === 0) {
+  if (dedupedVaccinations.length === 0) {
     warnings.push("No vaccination entries were confidently extracted.");
   }
-  if (fields.vaccinesAdministered && vaccinations.length < fields.vaccinesAdministered) {
+  if (fields.vaccinesAdministered && dedupedVaccinations.length < fields.vaccinesAdministered) {
     warnings.push(
-      `Detected ${fields.vaccinesAdministered} administered vaccines, but parsed ${vaccinations.length} entries.`
+      `Detected ${fields.vaccinesAdministered} administered vaccines, but parsed ${dedupedVaccinations.length} entries.`
     );
   }
 
-  return { fields, vaccinations, warnings };
+  return { fields, vaccinations: dedupedVaccinations, nextImmunizationsDue, warnings };
 }
 
 export async function POST(request: Request) {
@@ -393,6 +603,7 @@ export async function POST(request: Request) {
       source: "ocr",
       fields: parsed.fields,
       vaccinations: parsed.vaccinations,
+      nextImmunizationsDue: parsed.nextImmunizationsDue,
       warnings: parsed.warnings,
       ...(process.env.NODE_ENV !== "production" ? { rawText } : {}),
     });

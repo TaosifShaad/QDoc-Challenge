@@ -41,6 +41,14 @@ interface OcrExtractResponse {
     firstName?: string;
     lastName?: string;
     dateOfBirth?: string;
+    email?: string;
+    personalHealthNumber?: string;
+    recipientRelationship?: string;
+    streetAddress?: string;
+    city?: string;
+    province?: string;
+    postalCode?: string;
+    ageAtPrinting?: string;
     documentTitle?: string;
     issuingProvince?: string;
     country?: string;
@@ -50,8 +58,18 @@ interface OcrExtractResponse {
   };
   vaccinations: Array<{
     date?: string;
+    dates?: string[];
+    vaccineName?: string;
+    mbCode?: string;
     product?: string;
     lot?: string;
+  }>;
+  nextImmunizationsDue?: Array<{
+    vaccineName?: string;
+    mbCode?: string;
+    doseNumber?: number;
+    dueDate?: string;
+    status?: string;
   }>;
   warnings: string[];
   rawText?: string;
@@ -164,7 +182,16 @@ export default function PatientsPage() {
         firstName: ocr.fields.firstName ?? fromFullName.firstName,
         lastName: ocr.fields.lastName ?? fromFullName.lastName,
         dateOfBirth: ocr.fields.dateOfBirth,
+        email: ocr.fields.email,
+        personalHealthNumber: ocr.fields.personalHealthNumber,
+        recipientRelationship: ocr.fields.recipientRelationship,
+        streetAddress: ocr.fields.streetAddress,
+        city: ocr.fields.city,
+        province: ocr.fields.province,
+        postalCode: ocr.fields.postalCode,
+        ageAtPrinting: ocr.fields.ageAtPrinting,
         vaccinations: ocr.vaccinations,
+        nextImmunizationsDue: ocr.nextImmunizationsDue ?? [],
       });
 
       setOcrWarnings(ocr.warnings ?? []);
@@ -393,6 +420,12 @@ export default function PatientsPage() {
                         <p className="font-medium text-[#12455a]">Vaccinations</p>
                         <pre className="mt-1 overflow-auto rounded bg-[#f8fbfe] p-2 text-[#5a7d8e]">
 {JSON.stringify(ocrDebug.vaccinations, null, 2)}
+                        </pre>
+                      </div>
+                      <div>
+                        <p className="font-medium text-[#12455a]">Next Immunizations Due</p>
+                        <pre className="mt-1 overflow-auto rounded bg-[#f8fbfe] p-2 text-[#5a7d8e]">
+{JSON.stringify(ocrDebug.nextImmunizationsDue ?? [], null, 2)}
                         </pre>
                       </div>
                       {ocrDebug.rawText && (

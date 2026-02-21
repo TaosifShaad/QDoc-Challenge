@@ -6,6 +6,14 @@ export interface VaccinationRecord {
   provider?: string;
 }
 
+export interface DueImmunizationRecord {
+  vaccineName?: string;
+  mbCode?: string;
+  doseNumber?: number;
+  dueDate?: string;
+  status?: string;
+}
+
 export interface Patient {
   id?: string;
   userId?: string; // linked to a user account
@@ -16,9 +24,17 @@ export interface Patient {
   email?: string;
   phone?: string;
   address?: string;
+  personalHealthNumber?: string;
+  recipientRelationship?: string;
+  streetAddress?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  ageAtPrinting?: string;
   chronicConditions: string[];
   riskFactors: string[];
   vaccinations: VaccinationRecord[];
+  nextImmunizationsDue?: DueImmunizationRecord[];
   createdAt?: string;
   updatedAt?: string;
 }
