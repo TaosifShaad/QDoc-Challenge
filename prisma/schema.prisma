@@ -17,7 +17,6 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   userType     UserType  @default(PATIENT)
-  patients     Patient[]
 }
 
 model Patient {
