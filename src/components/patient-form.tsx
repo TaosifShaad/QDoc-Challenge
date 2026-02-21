@@ -783,62 +783,64 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
 
                   {/* Month/Year selectors — visible when selected */}
                   {sel.selected && (
-                    <div className="mt-3 flex items-center gap-2 pl-7">
-                      <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-[#8ba8b8]" />
-                      <select
-                        value={sel.month}
-                        onChange={(e) =>
-                          updateVaccineField(
-                            vaccineName,
-                            "month",
-                            e.target.value
-                          )
-                        }
-                        className="flex h-8 w-full rounded-md border border-[#c2dcee] bg-white px-2 text-xs focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
-                      >
-                        <option value="">Month</option>
-                        {MONTHS.map((m) => (
-                          <option key={m.value} value={m.value}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={sel.year}
-                        onChange={(e) =>
-                          updateVaccineField(
-                            vaccineName,
-                            "year",
-                            e.target.value
-                          )
-                        }
-                        className="flex h-8 w-24 flex-shrink-0 rounded-md border border-[#c2dcee] bg-white px-2 text-xs focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
-                      >
-                        <option value="">Year</option>
-                        {YEARS.map((y) => (
-                          <option key={y} value={y}>
-                            {y}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={sel.doses}
-                        onChange={(e) =>
-                          updateVaccineField(
-                            vaccineName,
-                            "doses",
-                            Number(e.target.value) || 1
-                          )
-                        }
-                        title="Number of doses received"
-                        className="flex h-8 w-16 flex-shrink-0 rounded-md border border-[#c2dcee] bg-white px-2 text-center text-xs focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
-                      />
-                      <span className="flex-shrink-0 text-[10px] text-[#8ba8b8]">
-                        dose(s)
-                      </span>
+                    <div className="mt-3 grid grid-cols-[0.875rem_minmax(0,1fr)] items-start gap-x-2">
+                      <Calendar className="h-3.5 w-3.5 shrink-0 text-[#8ba8b8]" />
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <select
+                          value={sel.month}
+                          onChange={(e) =>
+                            updateVaccineField(
+                              vaccineName,
+                              "month",
+                              e.target.value
+                            )
+                          }
+                          className="h-8 flex-[1_1_4rem] min-w-[4rem] rounded-md border border-[#c2dcee] bg-white px-2 pr-6 text-sm text-[#12455a] focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
+                        >
+                          <option value="">Month</option>
+                          {MONTHS.map((m) => (
+                            <option key={m.value} value={m.value}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={sel.year}
+                          onChange={(e) =>
+                            updateVaccineField(
+                              vaccineName,
+                              "year",
+                              e.target.value
+                            )
+                          }
+                          className="h-8 w-[7rem] shrink-0 rounded-md border border-[#c2dcee] bg-white px-2 text-sm focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
+                        >
+                          <option value="">Year</option>
+                          {YEARS.map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={sel.doses}
+                          onChange={(e) =>
+                            updateVaccineField(
+                              vaccineName,
+                              "doses",
+                              Number(e.target.value) || 1
+                            )
+                          }
+                          title="Number of doses received"
+                          className="h-8 w-14 shrink-0 rounded-md border border-[#c2dcee] bg-white px-2 text-center text-sm focus:border-[#116cb6] focus:outline-none focus:ring-1 focus:ring-[#116cb6]"
+                        />
+                        <span className="shrink-0 whitespace-nowrap text-xs text-[#8ba8b8]">
+                          dose(s)
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
