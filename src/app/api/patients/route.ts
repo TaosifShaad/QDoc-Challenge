@@ -25,10 +25,17 @@ const createPatientSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
+  personalHealthNumber: z.string().optional().or(z.literal("")),
+  recipientRelationship: z.string().optional().or(z.literal("")),
+  streetAddress: z.string().optional().or(z.literal("")),
+  city: z.string().optional().or(z.literal("")),
+  province: z.string().optional().or(z.literal("")),
+  postalCode: z.string().optional().or(z.literal("")),
   chronicConditions: z.array(z.string()).default([]),
   riskFactors: z.array(z.string()).default([]),
   vaccinations: z.array(vaccinationSchema).default([]),
 });
+
 
 type PatientWithVaccinations = Prisma.PatientGetPayload<{
   include: { vaccinations: true };
@@ -45,6 +52,12 @@ function toPatientDto(patient: PatientWithVaccinations) {
     email: patient.email ?? undefined,
     phone: patient.phone ?? undefined,
     address: patient.address ?? undefined,
+    personalHealthNumber: (patient as any).personalHealthNumber ?? undefined,
+    recipientRelationship: (patient as any).recipientRelationship ?? undefined,
+    streetAddress: (patient as any).streetAddress ?? undefined,
+    city: (patient as any).city ?? undefined,
+    province: (patient as any).province ?? undefined,
+    postalCode: (patient as any).postalCode ?? undefined,
     chronicConditions: patient.chronicConditions,
     riskFactors: patient.riskFactors,
     vaccinations: patient.vaccinations.map((v) => ({
@@ -58,6 +71,7 @@ function toPatientDto(patient: PatientWithVaccinations) {
     updatedAt: patient.updatedAt.toISOString(),
   };
 }
+
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -120,6 +134,12 @@ export async function POST(request: Request) {
         email: parsed.data.email || null,
         phone: parsed.data.phone || null,
         address: parsed.data.address || null,
+        personalHealthNumber: parsed.data.personalHealthNumber || null,
+        recipientRelationship: parsed.data.recipientRelationship || null,
+        streetAddress: parsed.data.streetAddress || null,
+        city: parsed.data.city || null,
+        province: parsed.data.province || null,
+        postalCode: parsed.data.postalCode || null,
         chronicConditions: parsed.data.chronicConditions,
         riskFactors: parsed.data.riskFactors,
         vaccinations: {
@@ -131,6 +151,7 @@ export async function POST(request: Request) {
           })),
         },
       },
+
       include: { vaccinations: true },
     });
 

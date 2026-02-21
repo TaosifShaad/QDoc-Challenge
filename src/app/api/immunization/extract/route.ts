@@ -28,12 +28,12 @@ async function runOcr(image: Buffer): Promise<string> {
   const tesseractModule = await import("tesseract.js");
   const tesseract = (tesseractModule.default ??
     tesseractModule) as {
-    recognize: (
-      image: Buffer,
-      lang: string,
-      options?: { langPath?: string; gzip?: boolean; workerPath?: string }
-    ) => Promise<{ data: { text: string } }>;
-  };
+      recognize: (
+        image: Buffer,
+        lang: string,
+        options?: { langPath?: string; gzip?: boolean; workerPath?: string }
+      ) => Promise<{ data: { text: string } }>;
+    };
   const engDataModule = await import("@tesseract.js-data/eng");
   const engData = (engDataModule.default ?? engDataModule) as {
     langPath?: string;
@@ -64,7 +64,7 @@ type ExtractedFields = {
   city?: string;
   province?: string;
   postalCode?: string;
-  ageAtPrinting?: string;
+
   documentTitle?: string;
   issuingProvince?: string;
   country?: string;
@@ -353,8 +353,7 @@ function parseOcrText(rawText: string): {
   );
   if (relationshipMatch?.[1]) fields.recipientRelationship = cleanLine(relationshipMatch[1]);
 
-  const ageMatch = text.match(/\bAge\s*[:\-]\s*([^\n]+)/i);
-  if (ageMatch?.[1]) fields.ageAtPrinting = cleanLine(ageMatch[1]);
+
 
   const postalMatch = text.match(/\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i);
   if (postalMatch) fields.postalCode = `${postalMatch[1].toUpperCase()} ${postalMatch[2].toUpperCase()}`;

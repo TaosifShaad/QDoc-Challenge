@@ -48,7 +48,7 @@ const patientSchema = z.object({
   city: z.string().optional(),
   province: z.string().optional(),
   postalCode: z.string().optional(),
-  ageAtPrinting: z.string().optional(),
+
   chronicConditions: z.array(z.string()),
   riskFactors: z.array(z.string()),
   vaccinations: z.array(vaccinationSchema),
@@ -83,7 +83,7 @@ export interface PatientFormPrefill {
   city?: string;
   province?: string;
   postalCode?: string;
-  ageAtPrinting?: string;
+
   vaccinations?: OcrVaccinationPrefill[];
   nextImmunizationsDue?: Array<{
     vaccineName?: string;
@@ -132,42 +132,94 @@ const emptyVaccineSelections = () =>
 const normalizeToken = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
 
-const mapProductToVaccineName = (product: string): string | null => {
+/** Maps OCR product/vaccine name to one or more known VACCINE_NAMES entries */
+const mapProductToVaccineNames = (product: string): string[] => {
   const normalized = normalizeToken(product);
-  if (!normalized) return null;
+  if (!normalized) return [];
+
+  const results: string[] = [];
+
+  // COVID-19
   if (normalized.includes("pfizer") || normalized.includes("comirnaty")) {
-    return "COVID-19 (Pfizer-BioNTech)";
+    results.push("COVID-19 (Pfizer-BioNTech)");
   }
   if (normalized.includes("moderna") || normalized.includes("spikevax")) {
-    return "COVID-19 (Moderna)";
+    results.push("COVID-19 (Moderna)");
   }
-  if (normalized.includes("influenza") || normalized.includes("flu")) {
-    return "Influenza (Flu)";
+
+  // Influenza
+  if (normalized.includes("influenza") || normalized.includes("flu") || normalized.includes("inf")) {
+    results.push("Influenza (Flu)");
   }
-  if (normalized.includes("tdap") || normalized.includes("tetanus")) {
-    return "Tdap (Tetanus, Diphtheria, Pertussis)";
+
+  // DTaP-IPV-Hib → Tdap + Polio (Manitoba combo vaccine)
+  if (
+    normalized.includes("dtap ipv hib") ||
+    normalized.includes("dtap ipv") ||
+    (normalized.includes("diphtheria") && normalized.includes("tetanus") && normalized.includes("pertussis") && normalized.includes("polio"))
+  ) {
+    results.push("Tdap (Tetanus, Diphtheria, Pertussis)", "Polio (IPV)");
+  } else if (normalized.includes("tdap") || normalized.includes("tetanus") || (normalized.includes("diphtheria") && normalized.includes("pertussis"))) {
+    results.push("Tdap (Tetanus, Diphtheria, Pertussis)");
   }
-  if (normalized.includes("mmr")) {
-    return "MMR (Measles, Mumps, Rubella)";
+
+  // MMRV → MMR + Varicella (Manitoba combo)
+  if (normalized.includes("mmrv") || (normalized.includes("measles") && normalized.includes("varicella"))) {
+    results.push("MMR (Measles, Mumps, Rubella)", "Varicella (Chickenpox)");
+  } else {
+    if (normalized.includes("mmr") || (normalized.includes("measles") && normalized.includes("mumps"))) {
+      results.push("MMR (Measles, Mumps, Rubella)");
+    }
+    if (normalized.includes("varicella") || normalized.includes("chickenpox")) {
+      results.push("Varicella (Chickenpox)");
+    }
   }
-  if (normalized.includes("hepatitis a")) return "Hepatitis A";
-  if (normalized.includes("hepatitis b")) return "Hepatitis B";
+
+  // Meningococcal (Men-C-C)
+  if (normalized.includes("meningococcal") || normalized.includes("men c c") || normalized.includes("men c")) {
+    results.push("Meningococcal");
+  }
+
+  // Pneumococcal (Pneu-C-13)
+  if (normalized.includes("pneu c 13") || normalized.includes("pcv13") || normalized.includes("pneumococcal conjugate")) {
+    results.push("Pneumococcal (PCV13)");
+  } else if (normalized.includes("ppsv23") || normalized.includes("pneumococcal polysaccharide")) {
+    results.push("Pneumococcal (PPSV23)");
+  } else if (normalized.includes("pneumococcal")) {
+    results.push("Pneumococcal (PCV13)");
+  }
+
+  // Rotavirus (Rota-1)
+  if (normalized.includes("rotavirus") || normalized.includes("rota 1") || normalized.includes("rota1")) {
+    results.push("Rotavirus");
+  }
+
+  // Hepatitis
+  if (normalized.includes("hepatitis a") || normalized.includes("hep a")) results.push("Hepatitis A");
+  if (normalized.includes("hepatitis b") || normalized.includes("hep b")) results.push("Hepatitis B");
+
+  // HPV
   if (normalized.includes("hpv") || normalized.includes("papillomavirus")) {
-    return "HPV (Human Papillomavirus)";
+    results.push("HPV (Human Papillomavirus)");
   }
-  if (normalized.includes("pcv13")) return "Pneumococcal (PCV13)";
-  if (normalized.includes("ppsv23")) return "Pneumococcal (PPSV23)";
-  if (normalized.includes("varicella") || normalized.includes("chickenpox")) {
-    return "Varicella (Chickenpox)";
-  }
+
+  // Shingles
   if (normalized.includes("shingles") || normalized.includes("zoster")) {
-    return "Shingles (Zoster)";
+    results.push("Shingles (Zoster)");
   }
-  if (normalized.includes("meningococcal")) return "Meningococcal";
-  if (normalized.includes("polio") || normalized.includes("ipv")) return "Polio (IPV)";
-  if (normalized.includes("rotavirus")) return "Rotavirus";
-  return null;
+
+  // Polio standalone (only if not already added via DTaP combo)
+  if (!results.includes("Polio (IPV)") && (normalized.includes("polio") || normalized.includes("ipv"))) {
+    results.push("Polio (IPV)");
+  }
+
+  return results;
 };
+
+/** Compat wrapper: returns the first match or null */
+const mapProductToVaccineName = (product: string): string | null =>
+  mapProductToVaccineNames(product)[0] ?? null;
+
 
 const isIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -186,7 +238,8 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
     reset,
     formState: { errors },
   } = useForm<PatientFormData>({
-    resolver: zodResolver(patientSchema),
+    resolver: zodResolver(patientSchema) as any,
+
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -201,7 +254,7 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
       city: "",
       province: "",
       postalCode: "",
-      ageAtPrinting: "",
+
       chronicConditions: [],
       riskFactors: [],
       vaccinations: [],
@@ -234,7 +287,7 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
       city: prefill.city ?? current.city,
       province: prefill.province ?? current.province,
       postalCode: prefill.postalCode ?? current.postalCode,
-      ageAtPrinting: prefill.ageAtPrinting ?? current.ageAtPrinting,
+
       nextImmunizationsDue:
         prefill.nextImmunizationsDue ?? current.nextImmunizationsDue,
       vaccinations: current.vaccinations,
@@ -243,26 +296,41 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
     if (prefill.vaccinations && prefill.vaccinations.length > 0) {
       const nextSelections = emptyVaccineSelections();
       for (const item of prefill.vaccinations) {
-        const mappedName = mapProductToVaccineName(
-          item.product || item.vaccineName || ""
+        const mappedNames = mapProductToVaccineNames(
+          item.product || item.vaccineName || item.mbCode || ""
         );
-        const resolvedDate = item.date ?? item.dates?.[0];
-        if (!mappedName || !resolvedDate || !isIsoDate(resolvedDate)) continue;
-        const year = resolvedDate.slice(0, 4);
-        const month = resolvedDate.slice(5, 7);
-        const existing = nextSelections[mappedName];
-        nextSelections[mappedName] = {
-          selected: true,
-          month,
-          year,
-          doses: existing?.selected ? existing.doses + 1 : 1,
-        };
+        if (mappedNames.length === 0) continue;
+
+        // Use all dates from multi-date history rows (each date = one dose)
+        const allDates = (item.dates && item.dates.length > 0)
+          ? item.dates.filter(isIsoDate)
+          : (item.date && isIsoDate(item.date) ? [item.date] : []);
+        if (allDates.length === 0) continue;
+
+        // Use the latest date for month/year display
+        const latestDate = allDates[allDates.length - 1];
+        const year = latestDate.slice(0, 4);
+        const month = latestDate.slice(5, 7);
+
+        for (const mappedName of mappedNames) {
+          if (!nextSelections[mappedName]) continue;
+          const existing = nextSelections[mappedName];
+          nextSelections[mappedName] = {
+            selected: true,
+            month,
+            year,
+            doses: existing.selected
+              ? existing.doses + allDates.length
+              : allDates.length,
+          };
+        }
       }
       setVaccineSelections(nextSelections);
     } else {
       setVaccineSelections(emptyVaccineSelections());
     }
   }, [prefill, getValues, reset]);
+
 
   const toggleCondition = (condition: string) => {
     const current = selectedConditions || [];
@@ -578,17 +646,7 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
                 className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
               />
             </div>
-            <div>
-              <Label htmlFor="ageAtPrinting" className="text-[#12455a]">
-                Age At Date Of Printing
-              </Label>
-              <Input
-                id="ageAtPrinting"
-                {...register("ageAtPrinting")}
-                placeholder="1 yrs 8 mos"
-                className="mt-1 border-[#c2dcee] focus:border-[#116cb6] focus:ring-[#116cb6]"
-              />
-            </div>
+
             {(watch("nextImmunizationsDue") || []).length > 0 && (
               <div>
                 <p className="text-sm font-medium text-[#12455a]">
@@ -632,8 +690,8 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
                     key={condition}
                     variant={isSelected ? "default" : "outline"}
                     className={`cursor-pointer select-none transition-all duration-200 ${isSelected
-                        ? "bg-[#116cb6] text-white hover:bg-[#0d4d8b] border-[#116cb6]"
-                        : "border-[#c2dcee] text-[#5a7d8e] hover:border-[#116cb6] hover:text-[#116cb6]"
+                      ? "bg-[#116cb6] text-white hover:bg-[#0d4d8b] border-[#116cb6]"
+                      : "border-[#c2dcee] text-[#5a7d8e] hover:border-[#116cb6] hover:text-[#116cb6]"
                       }`}
                     onClick={() => toggleCondition(condition)}
                   >
@@ -661,8 +719,8 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
                     key={factor}
                     variant={isSelected ? "default" : "outline"}
                     className={`cursor-pointer select-none transition-all duration-200 ${isSelected
-                        ? "bg-[#f2c14e] text-[#12455a] hover:bg-[#e6b445] border-[#f2c14e]"
-                        : "border-[#c2dcee] text-[#5a7d8e] hover:border-[#f2c14e] hover:text-[#12455a]"
+                      ? "bg-[#f2c14e] text-[#12455a] hover:bg-[#e6b445] border-[#f2c14e]"
+                      : "border-[#c2dcee] text-[#5a7d8e] hover:border-[#f2c14e] hover:text-[#12455a]"
                       }`}
                     onClick={() => toggleRiskFactor(factor)}
                   >
@@ -708,8 +766,8 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
                 <div
                   key={vaccineName}
                   className={`rounded-xl border-2 p-3 transition-all duration-200 ${sel.selected
-                      ? "border-[#8fc748] bg-[#f5fbee] shadow-sm"
-                      : "border-[#eef4f9] bg-white hover:border-[#c2dcee]"
+                    ? "border-[#8fc748] bg-[#f5fbee] shadow-sm"
+                    : "border-[#eef4f9] bg-white hover:border-[#c2dcee]"
                     }`}
                 >
                   {/* Toggle row */}
@@ -720,8 +778,8 @@ export function PatientForm({ onSuccess, prefill }: PatientFormProps) {
                   >
                     <div
                       className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-colors ${sel.selected
-                          ? "border-[#8fc748] bg-[#8fc748] text-white"
-                          : "border-[#c2dcee] bg-white"
+                        ? "border-[#8fc748] bg-[#8fc748] text-white"
+                        : "border-[#c2dcee] bg-white"
                         }`}
                     >
                       {sel.selected && (

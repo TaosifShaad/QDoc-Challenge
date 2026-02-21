@@ -30,7 +30,7 @@ export interface Patient {
   city?: string;
   province?: string;
   postalCode?: string;
-  ageAtPrinting?: string;
+
   chronicConditions: string[];
   riskFactors: string[];
   vaccinations: VaccinationRecord[];

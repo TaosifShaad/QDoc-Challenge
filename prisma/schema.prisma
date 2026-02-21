@@ -21,24 +21,31 @@ model User {
 }
 
 model Patient {
-  id                String              @id @default(cuid())
-  firstName         String
-  lastName          String
-  dateOfBirth       DateTime
-  gender            String
-  email             String?
-  phone             String?
-  address           String?
-  chronicConditions String[]
-  riskFactors       String[]
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  userId            String?
-  user              User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vaccinations      VaccinationRecord[]
+  id                    String              @id @default(cuid())
+  firstName             String
+  lastName              String
+  dateOfBirth           DateTime
+  gender                String
+  email                 String?
+  phone                 String?
+  address               String?
+  personalHealthNumber  String?
+  recipientRelationship String?
+  streetAddress         String?
+  city                  String?
+  province              String?
+  postalCode            String?
+  chronicConditions     String[]
+  riskFactors           String[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  userId                String?
+  user                  User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vaccinations          VaccinationRecord[]
 
   @@index([userId])
 }
+
 
 model VaccinationRecord {
   id         String   @id @default(cuid())

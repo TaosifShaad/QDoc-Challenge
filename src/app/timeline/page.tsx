@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
 import {
   BarChart3,
   CheckCircle2,
@@ -20,6 +22,8 @@ import { motion } from "framer-motion";
 export default function TimelinePage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [markingComplete, setMarkingComplete] = useState<Set<string>>(new Set());
+
 
   useEffect(() => {
     async function fetchPatients() {
@@ -37,6 +41,45 @@ export default function TimelinePage() {
     }
     fetchPatients();
   }, []);
+
+  const refetchPatients = async () => {
+    try {
+      const res = await fetch("/api/patients?mine=true");
+      if (res.ok) setPatients(await res.json());
+    } catch { }
+  };
+
+  const markVaccineComplete = async (
+    patientId: string,
+    vaccineName: string,
+    doseNumber: number
+  ) => {
+    const key = `${patientId}-${vaccineName}-${doseNumber}`;
+    setMarkingComplete((prev) => new Set(prev).add(key));
+    try {
+      const res = await fetch(`/api/patients/${patientId}/vaccinations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vaccineName,
+          doseNumber,
+          dateGiven: new Date().toISOString().slice(0, 10),
+        }),
+      });
+      if (res.ok) {
+        await refetchPatients();
+      }
+    } catch (err) {
+      console.error("Failed to mark vaccine complete:", err);
+    } finally {
+      setMarkingComplete((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString("en-CA", {
@@ -280,10 +323,10 @@ export default function TimelinePage() {
                                           {entry.type !== "completed" && (
                                             <span
                                               className={`font-medium ${daysUntil < 0
-                                                  ? "text-[#d64545]"
-                                                  : daysUntil <= 10
-                                                    ? "text-[#b8930e]"
-                                                    : "text-[#116cb6]"
+                                                ? "text-[#d64545]"
+                                                : daysUntil <= 10
+                                                  ? "text-[#b8930e]"
+                                                  : "text-[#116cb6]"
                                                 }`}
                                             >
                                               {daysUntil < 0
@@ -294,6 +337,52 @@ export default function TimelinePage() {
                                             </span>
                                           )}
                                         </div>
+                                        {entry.type !== "completed" && (
+                                          <div className="mt-2">
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                const pid = patients.find(
+                                                  (p) => {
+                                                    const tl = getTimeline({
+                                                      dateOfBirth: p.dateOfBirth,
+                                                      gender: p.gender,
+                                                      chronicConditions: p.chronicConditions || [],
+                                                      riskFactors: p.riskFactors || [],
+                                                      vaccinations: p.vaccinations || [],
+                                                    });
+                                                    return tl.some(
+                                                      (t) =>
+                                                        t.vaccineName === entry.vaccineName &&
+                                                        t.date === entry.date
+                                                    );
+                                                  }
+                                                );
+                                                if (pid) {
+                                                  markVaccineComplete(
+                                                    pid.id!,
+                                                    entry.vaccineName,
+                                                    entry.doseNumber
+                                                  );
+                                                }
+                                              }}
+                                              disabled={markingComplete.has(
+                                                `${patients[0]?.id}-${entry.vaccineName}-${entry.doseNumber}`
+                                              )}
+                                              className="bg-[#5a8a1e] text-white hover:bg-[#4a7a18] text-xs"
+                                            >
+                                              {markingComplete.has(
+                                                `${patients[0]?.id}-${entry.vaccineName}-${entry.doseNumber}`
+                                              ) ? (
+                                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                              ) : (
+                                                <CheckCircle2 className="mr-1 h-3 w-3" />
+                                              )}
+                                              Mark Complete
+                                            </Button>
+                                          </div>
+                                        )}
+
                                       </div>
                                     </motion.div>
                                   );

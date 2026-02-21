@@ -41,6 +41,8 @@ export default function RemindersPage() {
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [markingComplete, setMarkingComplete] = useState<Set<string>>(new Set());
+
 
   useEffect(() => {
     async function fetchPatients() {
@@ -58,6 +60,41 @@ export default function RemindersPage() {
     }
     fetchPatients();
   }, []);
+
+  const refetchPatients = async () => {
+    try {
+      const res = await fetch("/api/patients?mine=true");
+      if (res.ok) setPatients(await res.json());
+    } catch { }
+  };
+
+  const markVaccineComplete = async (item: ReminderItem) => {
+    const rid = getReminderId(item);
+    setMarkingComplete((prev) => new Set(prev).add(rid));
+    try {
+      const res = await fetch(`/api/patients/${item.patientId}/vaccinations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vaccineName: item.vaccineName,
+          doseNumber: item.doseNumber,
+          dateGiven: new Date().toISOString().slice(0, 10),
+        }),
+      });
+      if (res.ok) {
+        await refetchPatients();
+      }
+    } catch (err) {
+      console.error("Failed to mark vaccine:", err);
+    } finally {
+      setMarkingComplete((prev) => {
+        const next = new Set(prev);
+        next.delete(rid);
+        return next;
+      });
+    }
+  };
+
 
   // Build reminder items from all patients
   const reminderItems: ReminderItem[] = patients.flatMap((patient) => {
@@ -207,10 +244,10 @@ export default function RemindersPage() {
       >
         <div
           className={`rounded-xl border p-4 ${item.daysUntil < 0
-              ? "border-[#e57d7d] bg-[#fef5f5]"
-              : item.daysUntil <= 3
-                ? "border-[#f8d586] bg-[#fffcf5]"
-                : "border-[#c2dcee] bg-[#f8fbfe]"
+            ? "border-[#e57d7d] bg-[#fef5f5]"
+            : item.daysUntil <= 3
+              ? "border-[#f8d586] bg-[#fffcf5]"
+              : "border-[#c2dcee] bg-[#f8fbfe]"
             }`}
         >
           <div className="flex items-start justify-between gap-3">
@@ -223,8 +260,8 @@ export default function RemindersPage() {
                 <Badge
                   variant="outline"
                   className={`text-[10px] shrink-0 ${item.daysUntil < 0
-                      ? "border-[#e57d7d] bg-[#fde8e8] text-[#d64545]"
-                      : "border-[#f8d586] bg-[#fef9e7] text-[#b8930e]"
+                    ? "border-[#e57d7d] bg-[#fde8e8] text-[#d64545]"
+                    : "border-[#f8d586] bg-[#fef9e7] text-[#b8930e]"
                     }`}
                 >
                   {item.daysUntil < 0 ? "Overdue" : "Due Soon"}
@@ -248,7 +285,21 @@ export default function RemindersPage() {
               )}
             </div>
 
-            <div className="shrink-0">
+            <div className="shrink-0 flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => markVaccineComplete(item)}
+                disabled={markingComplete.has(rid)}
+                variant="outline"
+                className="border-[#c2e8a0] text-[#5a8a1e] hover:bg-[#e1f5c6]"
+              >
+                {markingComplete.has(rid) ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                )}
+                Done
+              </Button>
               {isSent ? (
                 <Button
                   size="sm"
@@ -275,6 +326,7 @@ export default function RemindersPage() {
                 </Button>
               )}
             </div>
+
           </div>
         </div>
       </motion.div>

@@ -48,7 +48,7 @@ interface OcrExtractResponse {
     city?: string;
     province?: string;
     postalCode?: string;
-    ageAtPrinting?: string;
+
     documentTitle?: string;
     issuingProvince?: string;
     country?: string;
@@ -189,7 +189,7 @@ export default function PatientsPage() {
         city: ocr.fields.city,
         province: ocr.fields.province,
         postalCode: ocr.fields.postalCode,
-        ageAtPrinting: ocr.fields.ageAtPrinting,
+
         vaccinations: ocr.vaccinations,
         nextImmunizationsDue: ocr.nextImmunizationsDue ?? [],
       });
@@ -349,18 +349,18 @@ export default function PatientsPage() {
                 </CardHeader>
                 <CardContent>
                   <form className="space-y-4" onSubmit={handleExtractProof}>
-                  <div className="space-y-2">
-                    <Label htmlFor="proof-upload" className="text-[#12455a]">
-                      Upload image
-                    </Label>
-                    <Input
-                      id="proof-upload"
-                      type="file"
-                      accept="image/*"
-                      className="cursor-pointer"
-                      onChange={handleProofFileChange}
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="proof-upload" className="text-[#12455a]">
+                        Upload image
+                      </Label>
+                      <Input
+                        id="proof-upload"
+                        type="file"
+                        accept="image/*"
+                        className="cursor-pointer"
+                        onChange={handleProofFileChange}
+                      />
+                    </div>
                     <div className="flex items-center gap-2">
                       <Button type="submit" disabled={!proofFile || uploadingProof}>
                         {uploadingProof && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

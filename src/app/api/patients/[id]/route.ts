@@ -29,6 +29,12 @@ function toPatientDto(patient: PatientWithVaccinations) {
     email: patient.email ?? undefined,
     phone: patient.phone ?? undefined,
     address: patient.address ?? undefined,
+    personalHealthNumber: (patient as any).personalHealthNumber ?? undefined,
+    recipientRelationship: (patient as any).recipientRelationship ?? undefined,
+    streetAddress: (patient as any).streetAddress ?? undefined,
+    city: (patient as any).city ?? undefined,
+    province: (patient as any).province ?? undefined,
+    postalCode: (patient as any).postalCode ?? undefined,
     chronicConditions: patient.chronicConditions,
     riskFactors: patient.riskFactors,
     vaccinations: patient.vaccinations.map((v) => ({
@@ -42,6 +48,7 @@ function toPatientDto(patient: PatientWithVaccinations) {
     updatedAt: patient.updatedAt.toISOString(),
   };
 }
+
 
 export async function GET(
   request: Request,
