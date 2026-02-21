@@ -12,6 +12,8 @@ const updatePatientSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
+  chronicConditions: z.array(z.string()).optional(),
+  riskFactors: z.array(z.string()).optional(),
 });
 
 type PatientWithVaccinations = Prisma.PatientGetPayload<{
@@ -121,6 +123,12 @@ export async function PATCH(
         ...(parsed.data.phone !== undefined ? { phone: parsed.data.phone || null } : {}),
         ...(parsed.data.address !== undefined
           ? { address: parsed.data.address || null }
+          : {}),
+        ...(parsed.data.chronicConditions !== undefined
+          ? { chronicConditions: parsed.data.chronicConditions }
+          : {}),
+        ...(parsed.data.riskFactors !== undefined
+          ? { riskFactors: parsed.data.riskFactors }
           : {}),
       },
       include: { vaccinations: true },

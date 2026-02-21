@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import type { Patient } from "@/lib/types";
-import { VACCINE_NAMES } from "@/lib/types";
+import { VACCINE_NAMES, CHRONIC_CONDITIONS, RISK_FACTORS } from "@/lib/types";
 import { getRecommendations, type VaccineRecommendation } from "@/lib/vaccine-data";
 import { motion } from "framer-motion";
 
@@ -50,6 +50,8 @@ export default function ProfilePage() {
     email: "",
     phone: "",
     address: "",
+    chronicConditions: [] as string[],
+    riskFactors: [] as string[],
   });
 
   useEffect(() => {
@@ -112,6 +114,8 @@ export default function ProfilePage() {
       email: patient.email ?? "",
       phone: patient.phone ?? "",
       address: patient.address ?? "",
+      chronicConditions: patient.chronicConditions ?? [],
+      riskFactors: patient.riskFactors ?? [],
     });
   };
 
@@ -422,28 +426,89 @@ export default function ProfilePage() {
                     )}
 
                     {/* Conditions & Risk Factors */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {patient.chronicConditions.map((c) => (
-                        <Badge
-                          key={c}
-                          variant="outline"
-                          className="border-[#e57d7d] bg-[#fde8e8] text-[#d64545] text-xs"
-                        >
-                          <Heart className="mr-1 h-2.5 w-2.5" />
-                          {c}
-                        </Badge>
-                      ))}
-                      {patient.riskFactors.map((f) => (
-                        <Badge
-                          key={f}
-                          variant="outline"
-                          className="border-[#f8d586] bg-[#fef9e7] text-[#b8930e] text-xs"
-                        >
-                          <AlertTriangle className="mr-1 h-2.5 w-2.5" />
-                          {f}
-                        </Badge>
-                      ))}
-                    </div>
+                    {editingPatientId === patient.id ? (
+                      <div className="space-y-4 rounded-lg border border-[#c2dcee] bg-[#f8fbfe] p-4">
+                        <div>
+                          <Label className="text-[#12455a] mb-2 block">Chronic Conditions</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {CHRONIC_CONDITIONS.map((condition) => {
+                              const isSelected = editForm.chronicConditions.includes(condition);
+                              return (
+                                <Badge
+                                  key={condition}
+                                  variant={isSelected ? "default" : "outline"}
+                                  className={`cursor-pointer select-none transition-all duration-200 ${isSelected
+                                    ? "bg-[#116cb6] text-white hover:bg-[#0d4d8b] border-[#116cb6]"
+                                    : "border-[#c2dcee] text-[#5a7d8e] hover:border-[#116cb6] hover:text-[#116cb6]"
+                                    }`}
+                                  onClick={() => {
+                                    setEditForm(prev => ({
+                                      ...prev,
+                                      chronicConditions: isSelected
+                                        ? prev.chronicConditions.filter(c => c !== condition)
+                                        : [...prev.chronicConditions, condition]
+                                    }));
+                                  }}
+                                >
+                                  {condition}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-[#12455a] mb-2 block">Risk Factors</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {RISK_FACTORS.map((factor) => {
+                              const isSelected = editForm.riskFactors.includes(factor);
+                              return (
+                                <Badge
+                                  key={factor}
+                                  variant={isSelected ? "default" : "outline"}
+                                  className={`cursor-pointer select-none transition-all duration-200 ${isSelected
+                                    ? "bg-[#f2c14e] text-[#12455a] hover:bg-[#e6b445] border-[#f2c14e]"
+                                    : "border-[#c2dcee] text-[#5a7d8e] hover:border-[#f2c14e] hover:text-[#12455a]"
+                                    }`}
+                                  onClick={() => {
+                                    setEditForm(prev => ({
+                                      ...prev,
+                                      riskFactors: isSelected
+                                        ? prev.riskFactors.filter(f => f !== factor)
+                                        : [...prev.riskFactors, factor]
+                                    }));
+                                  }}
+                                >
+                                  {factor}
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {patient.chronicConditions.map((c) => (
+                          <Badge
+                            key={c}
+                            variant="outline"
+                            className="border-[#e57d7d] bg-[#fde8e8] text-[#d64545] text-xs"
+                          >
+                            <Heart className="mr-1 h-2.5 w-2.5" />
+                            {c}
+                          </Badge>
+                        ))}
+                        {patient.riskFactors.map((f) => (
+                          <Badge
+                            key={f}
+                            variant="outline"
+                            className="border-[#f8d586] bg-[#fef9e7] text-[#b8930e] text-xs"
+                          >
+                            <AlertTriangle className="mr-1 h-2.5 w-2.5" />
+                            {f}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Smart Vaccine Recommendations */}
                     <Separator className="bg-[#eef4f9]" />
